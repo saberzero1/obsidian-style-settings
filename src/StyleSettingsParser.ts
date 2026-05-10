@@ -1396,6 +1396,8 @@ export function parseStyleSettingsWithStandaloneYamlSidecar(
 		sidecarYamlText,
 		{
 			...sidecarOptions,
+			// When a sidecar is combined with CSS, default to override semantics so CSS
+			// remains the baseline unless the sidecar explicitly requests replace mode.
 			defaultMode: sidecarOptions.defaultMode || 'override',
 		}
 	);
@@ -1425,6 +1427,9 @@ export function parseStyleSettingsWithStandaloneYamlSidecar(
 	sidecarParsed.sections.forEach((sidecarSection) => {
 		const sourceId = sidecarSection.source?.sourceId;
 		if (sourceId && extractedSidecar.ignoredSectionSourceIds[sourceId]) return;
+		const ignoredSettingIds = sourceId
+			? extractedSidecar.ignoredSettingIdsBySourceId[sourceId]
+			: undefined;
 		const sectionMode = sourceId
 			? extractedSidecar.sectionModesBySourceId[sourceId]
 			: sidecarMode;
@@ -1453,10 +1458,13 @@ export function parseStyleSettingsWithStandaloneYamlSidecar(
 		const mergedSection = mergeOverrideSection(
 			mergedSections[currentIndex],
 			sidecarSection,
-			sourceId ? extractedSidecar.ignoredSettingIdsBySourceId[sourceId] : undefined
+			ignoredSettingIds
 		);
 		mergedSections[currentIndex] = mergedSection;
-		if (!sidecarSection.settings.length) {
+		const nonIgnoredOverrideSettingsCount = sidecarSection.settings.filter(
+			(setting) => !ignoredSettingIds?.[setting.id]
+		).length;
+		if (nonIgnoredOverrideSettingsCount === 0) {
 			overrideDiagnostics.push(
 				createDiagnostic({
 					severity: 'warning',
