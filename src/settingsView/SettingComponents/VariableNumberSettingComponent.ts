@@ -33,11 +33,16 @@ export class VariableNumberSettingComponent extends AbstractSettingComponent {
 			);
 			const onChange = debounce(
 				(value: string) => {
-					const isFloat = /\./.test(value);
+					const trimmed = value.trim();
+					const isFloat = /\./.test(trimmed);
+					const parsed = isFloat
+						? parseFloat(trimmed)
+						: parseInt(trimmed, 10);
+					if (!Number.isFinite(parsed)) return;
 					this.settingsManager.setSetting(
 						this.sectionId,
 						this.setting.id,
-						isFloat ? parseFloat(value) : parseInt(value, 10)
+						parsed
 					);
 				},
 				250,

@@ -134,11 +134,14 @@ function generateColorVariables(
 			];
 		case 'rgb-values': {
 			const rgb = parsedColor.rgb();
-			const alpha = opacity ? `,${parsedColor.alpha()}` : '';
+			const r = Math.round(rgb[0]);
+			const g = Math.round(rgb[1]);
+			const b = Math.round(rgb[2]);
+			const alpha = opacity ? `, ${parsedColor.alpha()}` : '';
 			return [
 				{
 					key,
-					value: `${rgb[0]},${rgb[1]},${rgb[2]}${alpha}`,
+					value: `${r}, ${g}, ${b}${alpha}`,
 				},
 				...alts,
 			];
@@ -148,15 +151,15 @@ function generateColorVariables(
 			const out = [
 				{
 					key: `${key}-r`,
-					value: rgb[0].toString(),
+					value: Math.round(rgb[0]).toString(),
 				},
 				{
 					key: `${key}-g`,
-					value: rgb[1].toString(),
+					value: Math.round(rgb[1]).toString(),
 				},
 				{
 					key: `${key}-b`,
-					value: rgb[2].toString(),
+					value: Math.round(rgb[2]).toString(),
 				},
 				...alts,
 			];
@@ -248,7 +251,7 @@ function getCSSVariables(
 						? value.toString()
 						: format_text.default.toString();
 				if (format_text.quotes) {
-					if (text !== `""`) {
+					if (text && text !== `""`) {
 						text = `'${text}'`;
 					} else {
 						text = ``;
@@ -450,13 +453,15 @@ export class CSSSettingsManager {
 					document.body.classList.remove(setting.id);
 				} else if (setting.type === SettingType.CLASS_SELECT) {
 					const multiToggle = setting as ClassMultiToggle;
-					multiToggle.options.forEach((v) => {
-						if (typeof v === 'string') {
-							document.body.classList.remove(v);
-						} else {
-							document.body.classList.remove(v.value);
-						}
-					});
+					if (Array.isArray(multiToggle.options)) {
+						multiToggle.options.forEach((v) => {
+							if (typeof v === 'string') {
+								document.body.classList.remove(v);
+							} else {
+								document.body.classList.remove(v.value);
+							}
+						});
+					}
 				}
 			});
 		});
@@ -503,14 +508,16 @@ export class CSSSettingsManager {
 
 		settings.forEach((s) => {
 			this.config[s.id] = {};
-			s.settings.forEach((setting) => {
-				this.config[s.id][setting.id] = setting;
+			if (Array.isArray(s.settings)) {
+				s.settings.forEach((setting) => {
+					this.config[s.id][setting.id] = setting;
 
-				if (setting.type === SettingType.COLOR_GRADIENT) {
-					if (!this.gradients[s.id]) this.gradients[s.id] = [];
-					this.gradients[s.id].push(setting as ColorGradient);
-				}
-			});
+					if (setting.type === SettingType.COLOR_GRADIENT) {
+						if (!this.gradients[s.id]) this.gradients[s.id] = [];
+						this.gradients[s.id].push(setting as ColorGradient);
+					}
+				});
+			}
 		});
 
 		let pruned = false;

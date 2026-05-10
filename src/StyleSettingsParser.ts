@@ -987,6 +987,7 @@ function parseBlock(
 	try {
 		parsed = yaml.load(normalizeYaml(source.rawYaml), {
 			filename: source.sourceId,
+			schema: yaml.DEFAULT_SCHEMA,
 		});
 	} catch (error) {
 		return {
