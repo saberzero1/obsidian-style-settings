@@ -35,6 +35,15 @@ type DiagnosticContext = {
 
 type PrimitiveDefault = boolean | number | string;
 
+type StandaloneYamlSourceExtractionResult = {
+	mode: StyleSettingsSidecarMode;
+	sources: StyleSettingsSourceMetadata[];
+	sectionModesBySourceId: Record<string, StyleSettingsSidecarMode>;
+	ignoredSectionSourceIds: Record<string, true>;
+	ignoredSettingIdsBySourceId: Record<string, Record<string, true>>;
+	diagnostics: StyleSettingsDiagnostic[];
+};
+
 export interface ParsedStyleSettingsResult {
 	sections: ParsedCSSSettings[];
 	diagnostics: StyleSettingsDiagnostic[];
@@ -43,6 +52,16 @@ export interface ParsedStyleSettingsResult {
 export interface ParseStyleSettingsOptions {
 	sourceName: string;
 	stylesheetHref?: string;
+}
+
+export type StyleSettingsSidecarMode = 'replace' | 'override';
+
+export interface ParseStyleSettingsSidecarOptions extends ParseStyleSettingsOptions {
+	defaultMode?: StyleSettingsSidecarMode;
+}
+
+export interface ParsedStyleSettingsWithSidecarResult extends ParsedStyleSettingsResult {
+	sidecarMode: StyleSettingsSidecarMode;
 }
 
 export interface NormalizedStyleSettingsSchema {
@@ -176,6 +195,170 @@ export function extractStyleSettingsSourcesFromCssText(
 	}
 
 	return blocks;
+}
+
+function buildStandaloneYamlSource(
+	rawYaml: string,
+	options: ParseStyleSettingsOptions,
+	blockIndex: number,
+	sourceKind: StyleSettingsSourceMetadata['sourceKind'] = 'standalone-yaml'
+): StyleSettingsSourceMetadata {
+	const lineCount = rawYaml.split(/\r\n|\r|\n/).length;
+	return {
+		sourceKind,
+		sourceName: options.sourceName,
+		sourceId: `${options.sourceName}#standalone-yaml-${blockIndex + 1}`,
+		blockIndex,
+		lineStart: 1,
+		lineEnd: lineCount,
+		rawYaml,
+		rawComment: rawYaml,
+		stylesheetHref: options.stylesheetHref,
+	};
+}
+
+function getStandaloneYamlSectionEntries(parsed: unknown): unknown[] {
+	if (Array.isArray(parsed)) return parsed;
+	if (!isRecord(parsed)) return [];
+	if (Array.isArray(parsed.sections)) return parsed.sections;
+	if (Array.isArray(parsed.settings) && getString(parsed.id) && getString(parsed.name)) {
+		return [parsed];
+	}
+	return [];
+}
+
+export function extractStyleSettingsSourcesFromStandaloneYamlText(
+	text: string,
+	options: ParseStyleSettingsSidecarOptions
+): StandaloneYamlSourceExtractionResult {
+	const modeSource = buildStandaloneYamlSource(text, options, 0);
+	const diagnostics: StyleSettingsDiagnostic[] = [];
+	let mode: StyleSettingsSidecarMode = options.defaultMode || 'replace';
+	let parsed: unknown;
+
+	try {
+		parsed = yaml.load(normalizeYaml(text), {
+			filename: `${options.sourceName}#standalone-yaml`,
+			schema: yaml.DEFAULT_SCHEMA,
+		});
+	} catch (error) {
+		return {
+			mode,
+			sources: [],
+			sectionModesBySourceId: {},
+			ignoredSectionSourceIds: {},
+			ignoredSettingIdsBySourceId: {},
+			diagnostics: [
+				createDiagnostic({
+					severity: 'error',
+					code: 'YAML_PARSE_ERROR',
+					message: `${error}`,
+					source: modeSource,
+					sectionId: options.sourceName,
+				}),
+			],
+		};
+	}
+
+	if (isRecord(parsed) && parsed.mode !== undefined) {
+		const parsedMode = getString(parsed.mode);
+		if (parsedMode === 'replace' || parsedMode === 'override') {
+			mode = parsedMode;
+		} else {
+			diagnostics.push(
+				createDiagnostic({
+					severity: 'error',
+					code: 'INVALID_SIDECAR_MODE',
+					message:
+						'Sidecar YAML mode must be either "replace" or "override". Falling back to default mode.',
+					source: modeSource,
+				})
+			);
+		}
+	}
+
+	const sectionEntries = getStandaloneYamlSectionEntries(parsed);
+	if (!sectionEntries.length) {
+		return {
+			mode,
+			sources: [],
+			sectionModesBySourceId: {},
+			ignoredSectionSourceIds: {},
+			ignoredSettingIdsBySourceId: {},
+			diagnostics: diagnostics.concat(
+				createDiagnostic({
+					severity: 'error',
+					code: 'INVALID_STANDALONE_YAML_DOCUMENT',
+					message:
+						'Standalone YAML must define either a top-level sections array or a single section object with name/id/settings.',
+					source: modeSource,
+				})
+			),
+		};
+	}
+
+	const sectionModesBySourceId: Record<string, StyleSettingsSidecarMode> = {};
+	const ignoredSectionSourceIds: Record<string, true> = {};
+	const ignoredSettingIdsBySourceId: Record<string, Record<string, true>> = {};
+	const sources: StyleSettingsSourceMetadata[] = sectionEntries.map((entry, index) => {
+		const rawYaml = yaml.dump(entry, { lineWidth: -1 }).trim();
+		const source = buildStandaloneYamlSource(rawYaml, options, index);
+		const sectionMode =
+			isRecord(entry) && getBoolean(entry.replace) === true ? 'replace' : mode;
+		sectionModesBySourceId[source.sourceId] = sectionMode;
+		if (sectionMode === 'override' && isRecord(entry)) {
+			const sectionId = getString(entry.id);
+			if (getBoolean(entry.remove) === true) {
+				ignoredSectionSourceIds[source.sourceId] = true;
+				diagnostics.push(
+					createDiagnostic({
+						severity: 'warning',
+						code: 'UNSUPPORTED_OVERRIDE_REMOVE',
+						message:
+							'Section removal is not supported in override mode yet. This entry will be ignored.',
+						source,
+						sectionId,
+						path: 'remove',
+					})
+				);
+			}
+
+			if (Array.isArray(entry.settings)) {
+				entry.settings.forEach((setting, settingIndex) => {
+					if (!isRecord(setting) || getBoolean(setting.remove) !== true) return;
+					const settingId = getString(setting.id);
+					if (settingId) {
+						ignoredSettingIdsBySourceId[source.sourceId] = {
+							...(ignoredSettingIdsBySourceId[source.sourceId] || {}),
+							[settingId]: true,
+						};
+					}
+					diagnostics.push(
+						createDiagnostic({
+							severity: 'warning',
+							code: 'UNSUPPORTED_OVERRIDE_REMOVE',
+							message:
+								'Setting removal is not supported in override mode yet. This entry will be ignored.',
+							source,
+							sectionId,
+							settingId,
+							path: `settings[${settingIndex}].remove`,
+						})
+					);
+				});
+			}
+		}
+		return source;
+	});
+
+	return {
+		mode,
+		sources,
+		sectionModesBySourceId,
+		ignoredSectionSourceIds,
+		ignoredSettingIdsBySourceId,
+		diagnostics,
+	};
 }
 
 function normalizeYaml(rawYaml: string): string {
@@ -1120,6 +1303,186 @@ export function parseStyleSettingsStylesheetText(
 	options: ParseStyleSettingsOptions
 ): ParsedStyleSettingsResult {
 	return parseStyleSettingsSources(extractStyleSettingsSourcesFromCssText(text, options));
+}
+
+export function parseStyleSettingsStandaloneYamlText(
+	text: string,
+	options: ParseStyleSettingsSidecarOptions
+): ParsedStyleSettingsWithSidecarResult {
+	const extracted = extractStyleSettingsSourcesFromStandaloneYamlText(text, options);
+	const parsed = parseStyleSettingsSources(extracted.sources);
+	return {
+		sections: parsed.sections,
+		diagnostics: sortDiagnostics([...extracted.diagnostics, ...parsed.diagnostics]),
+		sidecarMode: extracted.mode,
+	};
+}
+
+function withSourceKind(
+	source: StyleSettingsSourceMetadata | undefined,
+	sourceKind: StyleSettingsSourceMetadata['sourceKind']
+): StyleSettingsSourceMetadata | undefined {
+	return source ? { ...source, sourceKind } : undefined;
+}
+
+function withSettingSourceKind(
+	source: StyleSettingsSettingSourceMetadata | undefined,
+	sourceKind: StyleSettingsSourceMetadata['sourceKind']
+): StyleSettingsSettingSourceMetadata | undefined {
+	return source ? { ...source, sourceKind } : undefined;
+}
+
+function cloneSettingWithSourceKind(
+	setting: CSSSetting,
+	sourceKind: StyleSettingsSourceMetadata['sourceKind']
+): CSSSetting {
+	return {
+		...setting,
+		source: withSettingSourceKind(setting.source, sourceKind),
+	} as CSSSetting;
+}
+
+function cloneSectionWithSourceKind(
+	section: ParsedCSSSettings,
+	sourceKind: StyleSettingsSourceMetadata['sourceKind']
+): ParsedCSSSettings {
+	return {
+		...section,
+		source: withSourceKind(section.source, sourceKind),
+		settings: section.settings.map((setting) =>
+			cloneSettingWithSourceKind(setting, sourceKind)
+		),
+	};
+}
+
+function mergeOverrideSection(
+	baseSection: ParsedCSSSettings,
+	overrideSection: ParsedCSSSettings,
+	ignoredSettingIds?: Record<string, true>
+): ParsedCSSSettings {
+	const mergedSettings = [...baseSection.settings];
+	const settingIndexById = new Map<string, number>();
+	mergedSettings.forEach((setting, index) => {
+		settingIndexById.set(setting.id, index);
+	});
+
+	overrideSection.settings.forEach((setting) => {
+		if (ignoredSettingIds?.[setting.id]) return;
+		const existingIndex = settingIndexById.get(setting.id);
+		const overrideSetting = cloneSettingWithSourceKind(setting, 'css-yaml-override');
+		if (existingIndex === undefined) {
+			settingIndexById.set(overrideSetting.id, mergedSettings.length);
+			mergedSettings.push(overrideSetting);
+			return;
+		}
+		mergedSettings[existingIndex] = overrideSetting;
+	});
+
+	return {
+		...baseSection,
+		source: withSourceKind(overrideSection.source || baseSection.source, 'css-yaml-override'),
+		settings: mergedSettings,
+	};
+}
+
+export function parseStyleSettingsWithStandaloneYamlSidecar(
+	cssText: string,
+	cssOptions: ParseStyleSettingsOptions,
+	sidecarYamlText: string,
+	sidecarOptions: ParseStyleSettingsSidecarOptions
+): ParsedStyleSettingsWithSidecarResult {
+	const cssParsed = parseStyleSettingsStylesheetText(cssText, cssOptions);
+	const extractedSidecar = extractStyleSettingsSourcesFromStandaloneYamlText(
+		sidecarYamlText,
+		{
+			...sidecarOptions,
+			defaultMode: sidecarOptions.defaultMode || 'override',
+		}
+	);
+	const sidecarParsed = parseStyleSettingsSources(extractedSidecar.sources);
+	const sidecarMode = extractedSidecar.mode;
+
+	if (sidecarMode === 'replace') {
+		return {
+			sections: sidecarParsed.sections,
+			diagnostics: sortDiagnostics([
+				...cssParsed.diagnostics,
+				...extractedSidecar.diagnostics,
+				...sidecarParsed.diagnostics,
+			]),
+			sidecarMode,
+		};
+	}
+
+	const mergedSections = [...cssParsed.sections];
+	const sectionIndexById = new Map<string, number>();
+	mergedSections.forEach((section, index) => {
+		sectionIndexById.set(section.id, index);
+	});
+
+	const overrideDiagnostics: StyleSettingsDiagnostic[] = [];
+
+	sidecarParsed.sections.forEach((sidecarSection) => {
+		const sourceId = sidecarSection.source?.sourceId;
+		if (sourceId && extractedSidecar.ignoredSectionSourceIds[sourceId]) return;
+		const sectionMode = sourceId
+			? extractedSidecar.sectionModesBySourceId[sourceId]
+			: sidecarMode;
+		const currentIndex = sectionIndexById.get(sidecarSection.id);
+
+		if (sectionMode === 'replace') {
+			const sectionToInsert =
+				currentIndex === undefined
+					? sidecarSection
+					: cloneSectionWithSourceKind(sidecarSection, 'css-yaml-override');
+			if (currentIndex === undefined) {
+				sectionIndexById.set(sectionToInsert.id, mergedSections.length);
+				mergedSections.push(sectionToInsert);
+			} else {
+				mergedSections[currentIndex] = sectionToInsert;
+			}
+			return;
+		}
+
+		if (currentIndex === undefined) {
+			mergedSections.push(sidecarSection);
+			sectionIndexById.set(sidecarSection.id, mergedSections.length - 1);
+			return;
+		}
+
+		const mergedSection = mergeOverrideSection(
+			mergedSections[currentIndex],
+			sidecarSection,
+			sourceId ? extractedSidecar.ignoredSettingIdsBySourceId[sourceId] : undefined
+		);
+		mergedSections[currentIndex] = mergedSection;
+		if (!sidecarSection.settings.length) {
+			overrideDiagnostics.push(
+				createDiagnostic({
+					severity: 'warning',
+					code: 'EMPTY_OVERRIDE_SECTION',
+					message: `Override section "${sidecarSection.id}" does not include any settings; CSS section was left unchanged.`,
+					source: sidecarSection.source,
+					sectionId: sidecarSection.id,
+				})
+			);
+		}
+	});
+
+	const finalized = finalizeParsedStyleSettings({
+		sections: mergedSections,
+		diagnostics: [
+			...cssParsed.diagnostics,
+			...extractedSidecar.diagnostics,
+			...sidecarParsed.diagnostics,
+			...overrideDiagnostics,
+		],
+	});
+
+	return {
+		...finalized,
+		sidecarMode,
+	};
 }
 
 export function parseStyleSettingsSources(

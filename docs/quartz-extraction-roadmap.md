@@ -2,6 +2,25 @@
 
 This fork now treats Style Settings definitions as data that should be machine-readable, diagnosable, and reproducible for downstream tooling such as Quartz Themes. This document summarizes what changed across extraction-oriented PRs and outlines the next improvements that would further strengthen extraction workflows.
 
+## Sidecar YAML support (this PR)
+
+This pass adds standalone sidecar YAML as a first-class parser input path on top of the shared parser core.
+
+- Added standalone YAML document ingestion through the same parser/normalization/validation/export pipeline used by CSS `@settings` extraction.
+- Added explicit sidecar mode semantics:
+  - `replace`: use the sidecar YAML definitions as the authoritative settings source.
+  - `override`: start from CSS-derived settings and apply deterministic YAML section/setting replacements.
+- Override merge behavior is intentionally simple and deterministic:
+  - section-level replacement is supported
+  - setting-level replacement/addition by `id` is supported
+  - removals are currently deferred
+- Source provenance is preserved in structured output via source kind metadata for:
+  - CSS-only (`embedded-css`)
+  - YAML-only (`standalone-yaml`)
+  - CSS + YAML override (`css-yaml-override`)
+
+This enables Quartz Themes to keep maintained sidecar definitions for broken or abandoned upstream themes while still using CSS-embedded settings when available.
+
 ## Hardening pass (PR #2)
 
 This pass addressed upstream bug classes that could poison settings, crash the parser, or produce incorrect output for Quartz automation.
@@ -123,6 +142,8 @@ and a dedicated re-export module at `src/StyleSettingsCore.ts` for downstream co
 
 ### A. Add standalone YAML support
 
+Status: ✅ Completed in this PR (including explicit `replace` / `override` sidecar semantics on top of the shared parser core).
+
 The biggest remaining extraction ergonomics improvement would be first-class support for sidecar files such as:
 
 - `style-settings.yaml`
@@ -192,7 +213,19 @@ Recommended direction:
 - include derived output variable lists
 - add machine-readable dependency edges between settings
 
-### E. Add schema versioning guarantees
+### E. Add schema/value compatibility validation for values JSON
+
+Quartz and future sync tooling need a robust way to validate imported/exported values JSON against the structured Style Settings schema.
+
+Recommended direction:
+
+- add a compatibility layer that validates values JSON against the normalized schema contract
+- surface structured diagnostics for missing/extra/invalid values per setting type
+- make it usable for both imports and exported snapshots in automation pipelines
+
+This will prevent configuration drift and catch incompatible values early before they reach runtime/theme generation.
+
+### F. Add schema versioning guarantees
 
 Automation consumers need a stable contract.
 
@@ -203,7 +236,7 @@ Recommended direction:
 - optionally provide migration helpers or compatibility shims
 - document which fields are stable versus experimental
 
-### F. Improve diagnostics further
+### G. Improve diagnostics further
 
 The current diagnostics are already much better than silent failures, but future work could improve them further.
 
@@ -215,7 +248,7 @@ Recommended direction:
 - include exact setting paths and, where possible, YAML line/column spans
 - allow callers to request only errors or full warning streams
 
-### G. Support extraction from non-DOM inputs
+### H. Support extraction from non-DOM inputs
 
 Today the plugin runtime still discovers stylesheets via the DOM. For Quartz tooling, direct file-based extraction would be more robust.
 
@@ -225,7 +258,7 @@ Recommended direction:
 - support batch parsing of multiple files in a single call
 - produce deterministic output ordering for build pipelines
 
-### H. Add fixture-based parser coverage
+### I. Add fixture-based parser coverage
 
 This repository does not currently have parser-focused automated tests. Future work should add fixture-driven coverage for extraction behavior.
 
@@ -239,13 +272,25 @@ Recommended coverage areas:
 - color/themed-color validation
 - normalized schema snapshots
 
+### J. Add binding-impact metadata and/or static impact analysis
+
+Quartz Themes mapping quality improves when tooling can answer which settings affect which classes, variables, and rendered elements.
+
+Recommended direction:
+
+- extend binding metadata with explicit impact targets where deterministic
+- optionally add static impact analysis to trace class/variable/selector effects
+- expose this in machine-readable form for high-confidence `themes.json.styleSettings` generation
+
+This is especially valuable for future Quartz Syncer workflows that need highly accurate downstream mapping.
+
 ## Suggested next-step PRs
 
 If future contributors want a clean follow-up sequence, this is a good order:
 
 1. Add parser fixtures and schema snapshot tests.
-2. Add standalone YAML support.
-3. Add richer binding/dependency metadata.
+2. Add schema/value compatibility validation for imported/exported values JSON.
+3. Add richer binding/dependency metadata (including impact analysis where feasible).
 4. Add strict extraction mode with configurable severity.
 5. Publish or expose the parser as a pure standalone consumable module.
 6. Formalize schema versioning and diagnostics taxonomy.

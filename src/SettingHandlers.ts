@@ -3,7 +3,10 @@ import { SettingType } from './settingsView/SettingComponents/types';
 export const resetTooltip = 'Restore default';
 
 export type DiagnosticSeverity = 'error' | 'warning';
-export type StyleSettingsSourceKind = 'embedded-css' | 'standalone-yaml';
+export type StyleSettingsSourceKind =
+	| 'embedded-css'
+	| 'standalone-yaml'
+	| 'css-yaml-override';
 
 export interface StyleSettingsSourceMetadata {
 	sourceKind: StyleSettingsSourceKind;
