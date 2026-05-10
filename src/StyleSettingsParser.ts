@@ -325,13 +325,42 @@ function validateAltFormats(
 
 		const id = getString(entry.id);
 		const format = getString(entry.format);
-		if (!id || !format || !colorFormats.has(format)) {
+		if (!id) {
 			diagnostics.push(
 				createDiagnostic({
 					severity: 'error',
 					code: 'INVALID_ALT_FORMAT',
-					message:
-						'alt-format entries require non-empty id values and a supported color format.',
+					message: 'alt-format entries require a non-empty id value.',
+					source,
+					sectionId,
+					settingId,
+					path: `${path}[${index}]`,
+				})
+			);
+			return;
+		}
+
+		if (!format) {
+			diagnostics.push(
+				createDiagnostic({
+					severity: 'error',
+					code: 'INVALID_ALT_FORMAT',
+					message: 'alt-format entries require a non-empty format value.',
+					source,
+					sectionId,
+					settingId,
+					path: `${path}[${index}]`,
+				})
+			);
+			return;
+		}
+
+		if (!colorFormats.has(format)) {
+			diagnostics.push(
+				createDiagnostic({
+					severity: 'error',
+					code: 'INVALID_ALT_FORMAT',
+					message: `alt-format entries require a supported color format, received "${format}".`,
 					source,
 					sectionId,
 					settingId,
@@ -826,7 +855,7 @@ function validateSetting(
 					...baseSetting,
 					format,
 					default: defaultValue,
-					'alt-format': altFormats.value,
+					'alt-format': altFormats.value || [],
 					opacity: getBoolean(value.opacity),
 				} as VariableColor,
 				diagnostics,
