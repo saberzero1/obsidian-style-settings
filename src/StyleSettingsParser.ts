@@ -702,13 +702,57 @@ function validateSetting(
 				return { diagnostics };
 			}
 
-			if (min > max || step <= 0 || defaultValue < min || defaultValue > max) {
+			if (min > max) {
 				diagnostics.push(
 					createDiagnostic({
 						severity: 'error',
 						code: 'INVALID_SLIDER_DEFAULT',
-						message:
-							'Slider defaults must be within the min/max range, and step must be greater than zero.',
+						message: 'Slider min must be less than or equal to max.',
+						source,
+						sectionId,
+						settingId: id,
+						path,
+					})
+				);
+				return { diagnostics };
+			}
+
+			if (step <= 0) {
+				diagnostics.push(
+					createDiagnostic({
+						severity: 'error',
+						code: 'INVALID_SLIDER_DEFAULT',
+						message: 'Slider step must be greater than zero.',
+						source,
+						sectionId,
+						settingId: id,
+						path,
+					})
+				);
+				return { diagnostics };
+			}
+
+			if (defaultValue < min) {
+				diagnostics.push(
+					createDiagnostic({
+						severity: 'error',
+						code: 'INVALID_SLIDER_DEFAULT',
+						message: 'Slider default must be greater than or equal to min.',
+						source,
+						sectionId,
+						settingId: id,
+						path,
+					})
+				);
+				return { diagnostics };
+			}
+
+			if (defaultValue > max) {
+				diagnostics.push(
+					createDiagnostic({
+						severity: 'error',
+						code: 'INVALID_SLIDER_DEFAULT',
+						message: 'Slider default must be less than or equal to max.',
 						source,
 						sectionId,
 						settingId: id,
