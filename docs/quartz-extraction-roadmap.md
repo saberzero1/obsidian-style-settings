@@ -111,6 +111,14 @@ The parsing logic is now extracted into a reusable module instead of living enti
 - reason about parser behavior independently from the UI
 - evolve validation and normalization without touching unrelated UI code
 
+The parser now also exposes reusable stage entry points:
+
+- `extractStyleSettingsSourcesFromCssText(...)`
+- `parseStyleSettingsSources(...)`
+- `buildNormalizedStyleSettingsSchema(...)`
+
+and a dedicated re-export module at `src/StyleSettingsCore.ts` for downstream consumers. Source metadata also includes a `sourceKind` discriminator (`embedded-css` now, `standalone-yaml` reserved) to keep future sidecar YAML support additive.
+
 ## Architectural recommendations for future extraction-focused work
 
 ### A. Add standalone YAML support

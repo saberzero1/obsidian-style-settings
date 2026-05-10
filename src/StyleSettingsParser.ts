@@ -146,7 +146,7 @@ function getBlockFallbackName(source: StyleSettingsSourceMetadata): string {
 	return nameMatch?.[1]?.trim() || source.sourceName;
 }
 
-function extractBlocks(
+export function extractStyleSettingsSourcesFromCssText(
 	text: string,
 	options: ParseStyleSettingsOptions
 ): StyleSettingsSourceMetadata[] {
@@ -161,6 +161,7 @@ function extractBlocks(
 		const lineStart = getSourceLine(text, match.index);
 		const lineEnd = lineStart + rawComment.split(/\r\n|\r|\n/).length - 1;
 		blocks.push({
+			sourceKind: 'embedded-css',
 			sourceName: options.sourceName,
 			sourceId: `${options.sourceName}#settings-block-${blockIndex + 1}`,
 			blockIndex,
@@ -1118,10 +1119,16 @@ export function parseStyleSettingsStylesheetText(
 	text: string,
 	options: ParseStyleSettingsOptions
 ): ParsedStyleSettingsResult {
+	return parseStyleSettingsSources(extractStyleSettingsSourcesFromCssText(text, options));
+}
+
+export function parseStyleSettingsSources(
+	sources: StyleSettingsSourceMetadata[]
+): ParsedStyleSettingsResult {
 	const sections: ParsedCSSSettings[] = [];
 	const diagnostics: StyleSettingsDiagnostic[] = [];
 
-	extractBlocks(text, options).forEach((source) => {
+	sources.forEach((source) => {
 		const parsed = parseBlock(source);
 		diagnostics.push(...parsed.diagnostics);
 		if (parsed.section) sections.push(parsed.section);
