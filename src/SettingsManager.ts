@@ -18,6 +18,7 @@ import {
 import CSSSettingsPlugin from './main';
 import { SettingType } from './settingsView/SettingComponents/types';
 import chroma from 'chroma-js';
+import { isValidSavedColor } from './StyleSettingsShared';
 
 type VariableKV = Array<{ key: string; value: string }>;
 
@@ -33,6 +34,14 @@ export interface MappedSettings {
 	};
 }
 
+function safeRound(n: number): number {
+	return isNaN(n) ? 0 : Math.round(n);
+}
+
+function safeNum(n: number): number {
+	return isNaN(n) ? 0 : n;
+}
+
 function generateColorVariables(
 	key: string,
 	format: ColorFormat,
@@ -40,7 +49,16 @@ function generateColorVariables(
 	opacity: boolean | undefined,
 	altFormats: AltFormatList = []
 ): VariableKV {
-	const parsedColor = chroma(colorStr);
+	let parsedColor: ReturnType<typeof chroma>;
+	try {
+		parsedColor = chroma(colorStr);
+	} catch {
+		console.warn(
+			`Style Settings: could not parse color "${colorStr}" for variable --${key}; skipping.`
+		);
+		return [];
+	}
+
 	const alts = altFormats.reduce<VariableKV>((a, alt) => {
 		a.push(...generateColorVariables(alt.id, alt.format, colorStr, opacity));
 		return a;
@@ -59,20 +77,24 @@ function generateColorVariables(
 			];
 		case 'hsl-values': {
 			const hsl = parsedColor.hsl();
-			const alpha = opacity ? `,${parsedColor.alpha()}` : '';
-			const h = isNaN(hsl[0]) ? 0 : hsl[0];
+			const alpha = opacity ? `,${safeNum(parsedColor.alpha())}` : '';
+			const h = safeNum(hsl[0]);
+			const s = safeNum(hsl[1]);
+			const l = safeNum(hsl[2]);
 
 			return [
 				{
 					key,
-					value: `${h},${hsl[1] * 100}%,${hsl[2] * 100}%${alpha}`,
+					value: `${h},${s * 100}%,${l * 100}%${alpha}`,
 				},
 				...alts,
 			];
 		}
 		case 'hsl-split': {
 			const hsl = parsedColor.hsl();
-			const h = isNaN(hsl[0]) ? 0 : hsl[0];
+			const h = safeNum(hsl[0]);
+			const s = safeNum(hsl[1]);
+			const l = safeNum(hsl[2]);
 			const out = [
 				{
 					key: `${key}-h`,
@@ -80,11 +102,11 @@ function generateColorVariables(
 				},
 				{
 					key: `${key}-s`,
-					value: (hsl[1] * 100).toString() + '%',
+					value: (s * 100).toString() + '%',
 				},
 				{
 					key: `${key}-l`,
-					value: (hsl[2] * 100).toString() + '%',
+					value: (l * 100).toString() + '%',
 				},
 				...alts,
 			];
@@ -92,14 +114,16 @@ function generateColorVariables(
 			if (opacity)
 				out.push({
 					key: `${key}-a`,
-					value: parsedColor.alpha().toString(),
+					value: safeNum(parsedColor.alpha()).toString(),
 				});
 
 			return out;
 		}
 		case 'hsl-split-decimal': {
 			const hsl = parsedColor.hsl();
-			const h = isNaN(hsl[0]) ? 0 : hsl[0];
+			const h = safeNum(hsl[0]);
+			const s = safeNum(hsl[1]);
+			const l = safeNum(hsl[2]);
 			const out = [
 				{
 					key: `${key}-h`,
@@ -107,11 +131,11 @@ function generateColorVariables(
 				},
 				{
 					key: `${key}-s`,
-					value: hsl[1].toString(),
+					value: s.toString(),
 				},
 				{
 					key: `${key}-l`,
-					value: hsl[2].toString(),
+					value: l.toString(),
 				},
 				...alts,
 			];
@@ -119,7 +143,7 @@ function generateColorVariables(
 			if (opacity)
 				out.push({
 					key: `${key}-a`,
-					value: parsedColor.alpha().toString(),
+					value: safeNum(parsedColor.alpha()).toString(),
 				});
 
 			return out;
@@ -134,10 +158,10 @@ function generateColorVariables(
 			];
 		case 'rgb-values': {
 			const rgb = parsedColor.rgb();
-			const r = Math.round(rgb[0]);
-			const g = Math.round(rgb[1]);
-			const b = Math.round(rgb[2]);
-			const alpha = opacity ? `, ${parsedColor.alpha()}` : '';
+			const r = safeRound(rgb[0]);
+			const g = safeRound(rgb[1]);
+			const b = safeRound(rgb[2]);
+			const alpha = opacity ? `, ${safeNum(parsedColor.alpha())}` : '';
 			return [
 				{
 					key,
@@ -151,15 +175,15 @@ function generateColorVariables(
 			const out = [
 				{
 					key: `${key}-r`,
-					value: Math.round(rgb[0]).toString(),
+					value: safeRound(rgb[0]).toString(),
 				},
 				{
 					key: `${key}-g`,
-					value: Math.round(rgb[1]).toString(),
+					value: safeRound(rgb[1]).toString(),
 				},
 				{
 					key: `${key}-b`,
-					value: Math.round(rgb[2]).toString(),
+					value: safeRound(rgb[2]).toString(),
 				},
 				...alts,
 			];
@@ -167,7 +191,7 @@ function generateColorVariables(
 			if (opacity)
 				out.push({
 					key: `${key}-a`,
-					value: parsedColor.alpha().toString(),
+					value: safeNum(parsedColor.alpha()).toString(),
 				});
 
 			return out;
@@ -268,8 +292,10 @@ function getCSSVariables(
 					seenGradientSections.add(sectionId);
 
 				const colorSetting = setting as VariableColor;
-				const color =
+				const rawColor =
 					value !== undefined ? value.toString() : colorSetting.default;
+				const color =
+					rawColor && isValidSavedColor(rawColor) ? rawColor : undefined;
 
 				if (color) {
 					vars.push(
@@ -290,6 +316,10 @@ function getCSSVariables(
 					).forEach((kv) => {
 						gradientCandidates[kv.key] = kv.value;
 					});
+				} else if (rawColor) {
+					console.warn(
+						`Style Settings: invalid saved color "${rawColor}" for --${setting.id}; skipping.`
+					);
 				}
 
 				continue;
@@ -301,31 +331,39 @@ function getCSSVariables(
 				const colorSetting = setting as VariableThemedColor;
 				const colorKey =
 					modifier === 'light' ? 'default-light' : 'default-dark';
-				const color =
+				const rawColor =
 					value !== undefined ? value.toString() : colorSetting[colorKey];
+				const color =
+					rawColor && isValidSavedColor(rawColor) ? rawColor : undefined;
 
-				(modifier === 'light' ? themedLight : themedDark).push(
-					...generateColorVariables(
+				if (color) {
+					(modifier === 'light' ? themedLight : themedDark).push(
+						...generateColorVariables(
+							setting.id,
+							colorSetting.format,
+							color,
+							colorSetting.opacity,
+							colorSetting['alt-format']
+						)
+					);
+
+					generateColorVariables(
 						setting.id,
-						colorSetting.format,
+						'rgb',
 						color,
-						colorSetting.opacity,
-						colorSetting['alt-format']
-					)
-				);
-
-				generateColorVariables(
-					setting.id,
-					'rgb',
-					color,
-					colorSetting.opacity
-				).forEach((kv) => {
-					if (modifier === 'light') {
-						gradientCandidatesLight[kv.key] = kv.value;
-					} else {
-						gradientCandidatesDark[kv.key] = kv.value;
-					}
-				});
+						colorSetting.opacity
+					).forEach((kv) => {
+						if (modifier === 'light') {
+							gradientCandidatesLight[kv.key] = kv.value;
+						} else {
+							gradientCandidatesDark[kv.key] = kv.value;
+						}
+					});
+				} else if (rawColor) {
+					console.warn(
+						`Style Settings: invalid saved color "${rawColor}" for --${setting.id}; skipping.`
+					);
+				}
 				continue;
 			}
 		}
