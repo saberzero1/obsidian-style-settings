@@ -215,13 +215,16 @@ Recommended direction:
 
 ### E. Add schema/value compatibility validation for values JSON
 
+Status: ✅ Completed in this PR (theme-aware filtering + validation for mixed-theme exported values JSON).
+
 Quartz and future sync tooling need a robust way to validate imported/exported values JSON against the structured Style Settings schema.
 
-Recommended direction:
+This pass adds a parser-core-friendly compatibility API that:
 
-- add a compatibility layer that validates values JSON against the normalized schema contract
-- surface structured diagnostics for missing/extra/invalid values per setting type
-- make it usable for both imports and exported snapshots in automation pipelines
+- preserves and exposes key identity semantics (`sectionId@@settingId` and themed `@@light` / `@@dark` modifiers)
+- filters mixed-theme exports by schema relevance and ignores unrelated sections gracefully
+- validates relevant keys against schema-defined setting types, options, modifiers, numeric constraints, and color validity
+- returns categorized machine-readable results (`accepted`, `ignored`, `rejected`) plus a cleaned accepted-values object
 
 This will prevent configuration drift and catch incompatible values early before they reach runtime/theme generation.
 
@@ -289,11 +292,10 @@ This is especially valuable for future Quartz Syncer workflows that need highly 
 If future contributors want a clean follow-up sequence, this is a good order:
 
 1. Add parser fixtures and schema snapshot tests.
-2. Add schema/value compatibility validation for imported/exported values JSON.
-3. Add richer binding/dependency metadata (including impact analysis where feasible).
-4. Add strict extraction mode with configurable severity.
-5. Publish or expose the parser as a pure standalone consumable module.
-6. Formalize schema versioning and diagnostics taxonomy.
+2. Add richer binding/dependency metadata (including impact analysis where feasible).
+3. Add strict extraction mode with configurable severity.
+4. Publish or expose the parser as a pure standalone consumable module.
+5. Formalize schema versioning and diagnostics taxonomy.
 
 ## Guidance for future contributors
 
