@@ -1475,11 +1475,10 @@ export function parseStyleSettingsWithStandaloneYamlSidecar(
 			ignoredSettingIds
 		);
 		mergedSections[currentIndex] = mergedSection;
-		let nonIgnoredOverrideSettingsCount = 0;
-		sidecarSection.settings.forEach((setting) => {
-			if (!ignoredSettingIds?.[setting.id]) nonIgnoredOverrideSettingsCount += 1;
-		});
-		if (nonIgnoredOverrideSettingsCount === 0) {
+		const hasNonIgnoredOverrideSettings = sidecarSection.settings.some(
+			(setting) => !ignoredSettingIds?.[setting.id]
+		);
+		if (!hasNonIgnoredOverrideSettings) {
 			overrideDiagnostics.push(
 				createDiagnostic({
 					severity: 'warning',
