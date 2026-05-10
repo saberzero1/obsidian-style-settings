@@ -8,6 +8,10 @@ export {
 	parseStyleSettingsStylesheetText,
 	parseStyleSettingsWithStandaloneYamlSidecar,
 } from './StyleSettingsParser';
+export {
+	parseStyleSettingsExportKeyIdentity,
+	validateStyleSettingsExportValues,
+} from './StyleSettingsValuesCompatibility';
 export type {
 	NormalizedStyleSettings,
 	NormalizedStyleSettingsSchema,
@@ -18,6 +22,16 @@ export type {
 	ParseStyleSettingsSidecarOptions,
 	StyleSettingsSidecarMode,
 } from './StyleSettingsParser';
+export type {
+	ParsedStyleSettingsExportKey,
+	StyleSettingsCompatibilityAcceptedValue,
+	StyleSettingsCompatibilityDiagnostic,
+	StyleSettingsCompatibilityIgnoredValue,
+	StyleSettingsCompatibilityRejectedValue,
+	StyleSettingsExportIdentityKind,
+	ValidateStyleSettingsExportValuesOptions,
+	ValidateStyleSettingsExportValuesResult,
+} from './StyleSettingsValuesCompatibility';
 export type {
 	StyleSettingsDiagnostic,
 	StyleSettingsSettingSourceMetadata,
