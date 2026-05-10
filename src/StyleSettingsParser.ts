@@ -148,6 +148,20 @@ function getSourceLine(text: string, index: number): number {
 	return text.slice(0, index).split(/\r\n|\r|\n/).length;
 }
 
+function countLines(text: string): number {
+	let lines = 1;
+	for (let index = 0; index < text.length; index += 1) {
+		const code = text.charCodeAt(index);
+		if (code === 10) {
+			lines += 1;
+		} else if (code === 13) {
+			lines += 1;
+			if (text.charCodeAt(index + 1) === 10) index += 1;
+		}
+	}
+	return lines;
+}
+
 function getString(value: unknown): string | undefined {
 	return typeof value === 'string' && value.trim() ? value : undefined;
 }
@@ -203,7 +217,7 @@ function buildStandaloneYamlSource(
 	blockIndex: number,
 	sourceKind: StyleSettingsSourceMetadata['sourceKind'] = 'standalone-yaml'
 ): StyleSettingsSourceMetadata {
-	const lineCount = rawYaml.split(/\r\n|\r|\n/).length;
+	const lineCount = countLines(rawYaml);
 	return {
 		sourceKind,
 		sourceName: options.sourceName,
@@ -1461,9 +1475,10 @@ export function parseStyleSettingsWithStandaloneYamlSidecar(
 			ignoredSettingIds
 		);
 		mergedSections[currentIndex] = mergedSection;
-		const nonIgnoredOverrideSettingsCount = sidecarSection.settings.filter(
-			(setting) => !ignoredSettingIds?.[setting.id]
-		).length;
+		let nonIgnoredOverrideSettingsCount = 0;
+		sidecarSection.settings.forEach((setting) => {
+			if (!ignoredSettingIds?.[setting.id]) nonIgnoredOverrideSettingsCount += 1;
+		});
 		if (nonIgnoredOverrideSettingsCount === 0) {
 			overrideDiagnostics.push(
 				createDiagnostic({
