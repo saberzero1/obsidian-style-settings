@@ -199,19 +199,20 @@ Recommended direction:
 
 ### D. Expand binding metadata
 
-The current binding metadata is intentionally lightweight. Quartz-focused consumers would benefit from richer derived semantics such as:
+Status: ✅ Completed in this PR (canonical richer machine-readable binding metadata for normalized schema export).
 
-- explicit CSS variable names produced by split/alternate color formats
-- themed selector metadata beyond hard-coded light/dark targets
-- generated variable ranges for gradients
-- body class application rules for `class-select`
-- dependency metadata for settings that derive variables from other settings
+The normalized schema now includes deterministic binding metadata for major setting families, including explicit direct bindings plus derived outputs where applicable:
 
-Recommended direction:
+- `class-toggle` and `class-select` body class bindings
+- explicit CSS variable bindings for text/number/select/color setting families
+- themed light/dark bindings for `variable-themed-color`
+- derived bindings for color `alt-format` outputs
+- gradient output range metadata for `color-gradient`
+- intentional non-emitting metadata for presentation-only settings
 
-- add canonical `binding.kind` variants
-- include derived output variable lists
-- add machine-readable dependency edges between settings
+This provides a stable Quartz-friendly binding layer so downstream consumers do not need to infer runtime outputs from UI-oriented fields.
+
+It also lays the foundation for a later static impact analysis layer that can map settings and bindings to CSS usage and Quartz element categories.
 
 ### E. Add schema/value compatibility validation for values JSON
 
@@ -292,7 +293,7 @@ This is especially valuable for future Quartz Syncer workflows that need highly 
 If future contributors want a clean follow-up sequence, this is a good order:
 
 1. Add parser fixtures and schema snapshot tests.
-2. Add richer binding/dependency metadata (including impact analysis where feasible).
+2. Add static binding-impact analysis on top of the richer canonical binding metadata.
 3. Add strict extraction mode with configurable severity.
 4. Publish or expose the parser as a pure standalone consumable module.
 5. Formalize schema versioning and diagnostics taxonomy.
