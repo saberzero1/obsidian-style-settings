@@ -1,11 +1,15 @@
 import { ClassToggle, ParsedCSSSettings } from './SettingHandlers';
 import { CSSSettingsManager } from './SettingsManager';
 import {
+	NormalizedStyleSettingsSchema,
+	buildNormalizedStyleSettingsSchema,
+	finalizeParsedStyleSettings,
+	parseStyleSettingsStylesheetText,
+} from './StyleSettingsParser';
+import {
 	ErrorList,
 	getDescription,
 	getTitle,
-	nameRegExp,
-	settingRegExp,
 	SettingsSeachResource,
 } from './Utils';
 import './css/pickerOverrides.css';
@@ -14,9 +18,7 @@ import { CSSSettingsTab } from './settingsView/CSSSettingsTab';
 import { SettingType } from './settingsView/SettingComponents/types';
 import { SettingsView, viewType } from './settingsView/SettingsView';
 import '@simonwep/pickr/dist/themes/nano.min.css';
-import detectIndent from 'detect-indent';
-import yaml from 'js-yaml';
-import { Command, Plugin } from 'obsidian';
+import { Command, Notice, Plugin } from 'obsidian';
 
 export default class CSSSettingsPlugin extends Plugin {
 	settingsManager: CSSSettingsManager;
@@ -24,6 +26,8 @@ export default class CSSSettingsPlugin extends Plugin {
 	settingsList: ParsedCSSSettings[] = [];
 	errorList: ErrorList = [];
 	commandList: Command[] = [];
+	normalizedSchema: NormalizedStyleSettingsSchema =
+		buildNormalizedStyleSettingsSchema({ sections: [], diagnostics: [] });
 	lightEl: HTMLElement;
 	darkEl: HTMLElement;
 
@@ -43,6 +47,14 @@ export default class CSSSettingsPlugin extends Plugin {
 			name: 'Show style settings view',
 			callback: () => {
 				this.activateView();
+			},
+		});
+
+		this.addCommand({
+			id: 'copy-normalized-style-settings-schema',
+			name: 'Copy normalized Style Settings schema JSON',
+			callback: async () => {
+				await this.copyParsedSettingsSchema();
 			},
 		});
 
@@ -94,8 +106,8 @@ export default class CSSSettingsPlugin extends Plugin {
 	parseCSS() {
 		clearTimeout(this.debounceTimer);
 		this.debounceTimer = activeWindow.setTimeout(() => {
-			this.settingsList = [];
-			this.errorList = [];
+			const parsedSettings: ParsedCSSSettings[] = [];
+			const diagnostics: ErrorList = [];
 
 			// remove registered theme commands (sadly undocumented API)
 			for (const command of this.commandList) {
@@ -111,8 +123,18 @@ export default class CSSSettingsPlugin extends Plugin {
 			for (let i = 0, len = styleSheets.length; i < len; i++) {
 				const sheet = styleSheets.item(i);
 				if (!sheet) continue;
-				this.parseCSSStyleSheet(sheet);
+				const parsed = this.parseCSSStyleSheet(sheet);
+				parsedSettings.push(...parsed.sections);
+				diagnostics.push(...parsed.diagnostics);
 			}
+
+			const finalized = finalizeParsedStyleSettings({
+				sections: parsedSettings,
+				diagnostics,
+			});
+			this.settingsList = finalized.sections;
+			this.errorList = finalized.diagnostics;
+			this.normalizedSchema = buildNormalizedStyleSettingsSchema(finalized);
 
 			// compatability with Settings Search Plugin
 			this.registerSettingsToSettingsSearch();
@@ -128,6 +150,10 @@ export default class CSSSettingsPlugin extends Plugin {
 			this.settingsManager.initClasses();
 			this.registerSettingCommands();
 		}, 100);
+	}
+
+	getParsedSettingsSchema() {
+		return this.normalizedSchema;
 	}
 
 	/**
@@ -190,64 +216,11 @@ export default class CSSSettingsPlugin extends Plugin {
 	 * @param sheet the stylesheet to parse
 	 * @private
 	 */
-	private parseCSSStyleSheet(sheet: CSSStyleSheet): void {
+	private parseCSSStyleSheet(sheet: CSSStyleSheet) {
 		const text = sheet?.ownerNode?.textContent?.trim();
-		if (!text) return;
+		if (!text) return { sections: [], diagnostics: [] };
 
-		let match = settingRegExp.exec(text);
-
-		if (match?.length) {
-			do {
-				const nameMatch = text.match(nameRegExp);
-				if (!nameMatch) continue;
-
-				const name = nameMatch[1];
-
-				try {
-					const str = match[1].trim();
-					const settings = this.parseCSSSettings(str, name);
-
-					if (
-						settings &&
-						typeof settings === 'object' &&
-						settings.name &&
-						settings.id &&
-						settings.settings &&
-						settings.settings.length
-					) {
-						this.settingsList.push(settings);
-					}
-				} catch (e) {
-					this.errorList.push({ name, error: `${e}` });
-				}
-			} while ((match = settingRegExp.exec(text)) !== null);
-		}
-	}
-
-	/**
-	 * Parse css settings from a string.
-	 *
-	 * @param str the stringified settings to parse
-	 * @param name the name of the file
-	 * @private
-	 */
-	private parseCSSSettings(
-		str: string,
-		name: string
-	): ParsedCSSSettings | undefined {
-		const indent = detectIndent(str);
-
-		const settings: ParsedCSSSettings = yaml.load(
-			str.replace(/\t/g, indent.type === 'space' ? indent.indent : '    '),
-			{
-				filename: name,
-			}
-		) as ParsedCSSSettings;
-
-		if (!settings.settings) return undefined;
-
-		settings.settings = settings.settings.filter((setting) => setting);
-		return settings;
+		return parseStyleSettingsStylesheetText(text, this.getStyleSheetSource(sheet));
 	}
 
 	private registerSettingCommands(): void {
@@ -295,6 +268,59 @@ export default class CSSSettingsPlugin extends Plugin {
 		this.settingsManager.cleanup();
 		this.deactivateView();
 		this.unregisterSettingsFromSettingsSearch();
+	}
+
+	private async copyParsedSettingsSchema() {
+		const schemaJson = JSON.stringify(this.getParsedSettingsSchema(), null, 2);
+		const copied = await this.writeToClipboard(schemaJson);
+		if (copied) {
+			console.info('Style Settings schema export', this.getParsedSettingsSchema());
+			new Notice('Copied normalized Style Settings schema JSON');
+		} else {
+			new Notice('Failed to copy normalized Style Settings schema JSON');
+		}
+	}
+
+	private async writeToClipboard(text: string): Promise<boolean> {
+		try {
+			if (navigator.clipboard?.writeText) {
+				await navigator.clipboard.writeText(text);
+				return true;
+			}
+
+			const textarea = document.createElement('textarea');
+			textarea.value = text;
+			textarea.style.position = 'fixed';
+			textarea.style.opacity = '0';
+			document.body.appendChild(textarea);
+			textarea.select();
+			const copied = document.execCommand('copy');
+			textarea.remove();
+			return copied;
+		} catch (error) {
+			console.error('Style Settings | Failed to copy schema JSON', error);
+			return false;
+		}
+	}
+
+	private getStyleSheetSource(sheet: CSSStyleSheet) {
+		const ownerNode = sheet.ownerNode as HTMLElement | null;
+		const stylesheetHref =
+			sheet.href ||
+			(ownerNode instanceof HTMLLinkElement ? ownerNode.href : undefined) ||
+			ownerNode?.getAttribute?.('href') ||
+			undefined;
+		const sourceName =
+			stylesheetHref?.split('/').pop() ||
+			ownerNode?.getAttribute?.('data-source') ||
+			ownerNode?.id ||
+			ownerNode?.tagName?.toLowerCase() ||
+			'inline-stylesheet';
+
+		return {
+			sourceName,
+			stylesheetHref,
+		};
 	}
 
 	deactivateView() {

@@ -2,6 +2,37 @@ import { SettingType } from './settingsView/SettingComponents/types';
 
 export const resetTooltip = 'Restore default';
 
+export type DiagnosticSeverity = 'error' | 'warning';
+
+export interface StyleSettingsSourceMetadata {
+	sourceName: string;
+	sourceId: string;
+	blockIndex: number;
+	lineStart: number;
+	lineEnd: number;
+	rawYaml: string;
+	rawComment: string;
+	stylesheetHref?: string;
+}
+
+export interface StyleSettingsSettingSourceMetadata
+	extends StyleSettingsSourceMetadata {
+	settingIndex: number;
+	path: string;
+}
+
+export interface StyleSettingsDiagnostic {
+	severity: DiagnosticSeverity;
+	code: string;
+	message: string;
+	name: string;
+	error: string;
+	source?: StyleSettingsSourceMetadata;
+	sectionId?: string;
+	settingId?: string;
+	path?: string;
+}
+
 export interface WithTitle {
 	title: string;
 	'title.ar'?: string;
@@ -59,6 +90,7 @@ export interface WithDescription {
 export interface Meta extends WithTitle, WithDescription {
 	id: string;
 	type: SettingType;
+	source?: StyleSettingsSettingSourceMetadata;
 }
 
 export interface Heading extends Meta {
@@ -156,11 +188,13 @@ export type CSSSetting =
 	| VariableNumberSlider
 	| VariableSelect
 	| VariableColor
-	| VariableThemedColor;
+	| VariableThemedColor
+	| ColorGradient;
 
 export interface ParsedCSSSettings {
 	name: string;
 	id: string;
 	collapsed: boolean;
 	settings: Array<CSSSetting>;
+	source?: StyleSettingsSourceMetadata;
 }
