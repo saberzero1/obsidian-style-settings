@@ -88,8 +88,11 @@ export interface NormalizedStyleSettings {
 	defaults?: Record<string, PrimitiveDefault>;
 	options?: SelectOption[];
 	constraints?: Record<string, PrimitiveDefault | AltFormatList>;
+	// Primary binding kept as a single deterministic summary for simple consumers.
 	binding: NormalizedStyleSettingsBinding;
+	// Direct runtime bindings this setting controls (may include themed variants).
 	bindings: NormalizedStyleSettingsBinding[];
+	// Outputs derived from direct bindings (e.g., alt color formats, gradient outputs).
 	derivedBindings: NormalizedStyleSettingsBinding[];
 	source?: StyleSettingsSettingSourceMetadata;
 }
@@ -1742,6 +1745,22 @@ function getBindingMetadata(setting: CSSSetting): {
 			const themedSetting = setting as VariableThemedColor;
 			const opacity = !!themedSetting.opacity;
 			const variables = getColorOutputVariables(setting.id, themedSetting.format, opacity);
+			const selectors = {
+				light: 'body.theme-light.css-settings-manager',
+				dark: 'body.theme-dark.css-settings-manager',
+			};
+			const binding: NormalizedStyleSettingsBinding = {
+				kind: 'themed-css-variable',
+				target: 'css-variable',
+				variant: 'base',
+				outputMode: variables.length > 1 ? 'multi' : 'single',
+				variable: variables[0],
+				variables,
+				format: themedSetting.format,
+				opacity,
+				selectors,
+				settingType: setting.type,
+			};
 			const bindings: NormalizedStyleSettingsBinding[] = ['light', 'dark'].map(
 				(variant) => ({
 					kind: 'themed-css-variable',
@@ -1752,15 +1771,12 @@ function getBindingMetadata(setting: CSSSetting): {
 					variables,
 					format: themedSetting.format,
 					opacity,
-					selectors: {
-						light: 'body.theme-light.css-settings-manager',
-						dark: 'body.theme-dark.css-settings-manager',
-					},
+					selectors,
 					settingType: setting.type,
 				})
 			);
 			return {
-				binding: bindings[0],
+				binding,
 				bindings,
 				derivedBindings: [
 					...getAltFormatDerivedBindings(
