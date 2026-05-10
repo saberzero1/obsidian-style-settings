@@ -1,10 +1,18 @@
-import { Meta, WithDescription, WithTitle } from './SettingHandlers';
+import {
+	Meta,
+	StyleSettingsDiagnostic,
+	WithDescription,
+	WithTitle,
+} from './SettingHandlers';
+export {
+	isValidDefaultColor,
+	nameRegExp,
+	settingRegExp,
+} from './StyleSettingsShared';
 import { lang, t } from './lang/helpers';
 import Pickr from '@simonwep/pickr';
 
-export const settingRegExp = /\/\*!?\s*@settings[\r\n]+?([\s\S]+?)\*\//g;
-export const nameRegExp = /^name:\s*(.+)$/m;
-export type ErrorList = Array<{ name: string; error: string }>;
+export type ErrorList = StyleSettingsDiagnostic[];
 
 export function getTitle<T extends Meta>(config: T): string {
 	if (lang) {
@@ -23,10 +31,6 @@ export function getDescription<T extends Meta>(config: T): string | undefined {
 	}
 
 	return config.description;
-}
-
-export function isValidDefaultColor(color: string) {
-	return /^(#|rgb|hsl)/.test(color);
 }
 
 export function getPickrSettings(opts: {

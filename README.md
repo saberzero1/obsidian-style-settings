@@ -6,6 +6,20 @@ This plugin allows snippet, theme, and plugin CSS files to define a set of confi
 
 Configurable settings are defined by comments within CSS files beginning with `/* @settings`. These comments must contain YAML with `name`, `id`, and `settings` properties. Style Settings will scan for these comments in all CSS loaded by Obsidian from the `snippets`, `themes`, and `plugins` directories under your vault's configuration directory (`%yourVault%/.obsidian/`).  Please see the [Obsidian Docs](https://help.obsidian.md/Home) for more information.
 
+## Automation-oriented schema export
+
+This fork includes extraction-focused parser helpers in [`src/StyleSettingsParser.ts`](src/StyleSettingsParser.ts) plus an Obsidian command named **Copy normalized Style Settings schema JSON**.
+
+The normalized schema export is intended for downstream tooling that needs predictable machine-readable data, including:
+
+- independently parsed `@settings` blocks per stylesheet
+- normalized select/class-select options
+- source metadata for each section and setting
+- structured diagnostics for parsing and semantic validation problems
+- binding-relevant metadata such as CSS variable or body-class behavior
+
+Inside Obsidian, run the export command to copy the current normalized schema to the clipboard for debugging. For code-driven consumers, use the parser helpers directly to parse stylesheet text and build the normalized schema JSON.
+
 For example, adding this to a CSS snippet in your vault's snippets directory (`%yourVault%/.obsidian/snippets`):
 
 ```css

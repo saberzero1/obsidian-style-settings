@@ -73,7 +73,7 @@ export class SettingsMarkup extends Component {
 			containerEl.createDiv({ cls: 'style-settings-error' }, (wrapper) => {
 				wrapper.createDiv({
 					cls: 'style-settings-error-name',
-					text: `Error: ${err.name}`,
+					text: `${err.severity === 'warning' ? 'Warning' : 'Error'}: ${err.name}`,
 				});
 				wrapper.createDiv({
 					cls: 'style-settings-error-desc',
