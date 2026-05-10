@@ -65,7 +65,7 @@ export interface ParsedStyleSettingsWithSidecarResult extends ParsedStyleSetting
 }
 
 export interface NormalizedStyleSettingsSchema {
-	version: 1;
+	version: 2;
 	generatedAt: string;
 	sections: NormalizedStyleSettingsSection[];
 	diagnostics: StyleSettingsDiagnostic[];
@@ -88,8 +88,49 @@ export interface NormalizedStyleSettings {
 	defaults?: Record<string, PrimitiveDefault>;
 	options?: SelectOption[];
 	constraints?: Record<string, PrimitiveDefault | AltFormatList>;
-	binding: Record<string, PrimitiveDefault | PrimitiveDefault[] | Record<string, string>>;
+	// Primary binding kept as a single deterministic summary for simple consumers.
+	binding: NormalizedStyleSettingsBinding;
+	// Direct runtime bindings this setting controls (may include themed variants).
+	bindings: NormalizedStyleSettingsBinding[];
+	// Outputs derived from direct bindings (e.g., alt color formats, gradient outputs).
+	derivedBindings: NormalizedStyleSettingsBinding[];
 	source?: StyleSettingsSettingSourceMetadata;
+}
+
+export type NormalizedStyleSettingsBindingVariant = 'base' | 'light' | 'dark';
+
+export type NormalizedStyleSettingsBindingKind =
+	| 'non-emitting'
+	| 'body-class-toggle'
+	| 'body-class-select'
+	| 'css-variable'
+	| 'themed-css-variable'
+	| 'derived-css-variable'
+	| 'gradient-output';
+
+export interface NormalizedStyleSettingsBinding {
+	kind: NormalizedStyleSettingsBindingKind;
+	target: 'none' | 'body-class' | 'css-variable';
+	variant: NormalizedStyleSettingsBindingVariant;
+	outputMode: 'single' | 'multi' | 'range' | 'none';
+	variable?: string;
+	variables?: string[];
+	variablePrefix?: string;
+	variablePattern?: string;
+	className?: string;
+	classValues?: string[];
+	settingType?: string;
+	reason?: string;
+	format?: string;
+	opacity?: boolean;
+	quotes?: boolean;
+	allowEmpty?: boolean;
+	selectors?: Record<'light' | 'dark', string>;
+	derivedFrom?: 'alt-format' | 'gradient';
+	sourceVariable?: string;
+	sourceVariables?: string[];
+	step?: number;
+	pad?: number;
 }
 
 const colorFormats = new Set([
@@ -1554,84 +1595,247 @@ export function finalizeParsedStyleSettings(
 	};
 }
 
-function getBinding(setting: CSSSetting): NormalizedStyleSettings['binding'] {
+function getColorOutputVariables(id: string, format: string, opacity: boolean): string[] {
+	switch (format) {
+		case 'hsl-split':
+		case 'hsl-split-decimal':
+			return [
+				`--${id}-h`,
+				`--${id}-s`,
+				`--${id}-l`,
+				...(opacity ? [`--${id}-a`] : []),
+			];
+		case 'rgb-split':
+			return [
+				`--${id}-r`,
+				`--${id}-g`,
+				`--${id}-b`,
+				...(opacity ? [`--${id}-a`] : []),
+			];
+		default:
+			return [`--${id}`];
+	}
+}
+
+function getAltFormatDerivedBindings(
+	sourceSettingId: string,
+	altFormats: AltFormatList,
+	opacity: boolean,
+	variant: NormalizedStyleSettingsBindingVariant
+): NormalizedStyleSettingsBinding[] {
+	return altFormats.map((alt) => {
+		const variables = getColorOutputVariables(alt.id, alt.format, opacity);
+		return {
+			kind: 'derived-css-variable',
+			target: 'css-variable',
+			variant,
+			outputMode: variables.length > 1 ? 'multi' : 'single',
+			variable: variables[0],
+			variables,
+			format: alt.format,
+			opacity,
+			derivedFrom: 'alt-format',
+			sourceVariable: `--${sourceSettingId}`,
+		};
+	});
+}
+
+function getBindingMetadata(setting: CSSSetting): {
+	binding: NormalizedStyleSettingsBinding;
+	bindings: NormalizedStyleSettingsBinding[];
+	derivedBindings: NormalizedStyleSettingsBinding[];
+} {
 	switch (setting.type) {
-		case SettingType.CLASS_TOGGLE:
-			return {
+		case SettingType.CLASS_TOGGLE: {
+			const binding: NormalizedStyleSettingsBinding = {
 				kind: 'body-class-toggle',
+				target: 'body-class',
+				variant: 'base',
+				outputMode: 'single',
 				className: setting.id,
+				settingType: setting.type,
 			};
+			return { binding, bindings: [binding], derivedBindings: [] };
+		}
 		case SettingType.CLASS_SELECT: {
 			const selectSetting = setting as ClassMultiToggle;
-			return {
+			const binding: NormalizedStyleSettingsBinding = {
 				kind: 'body-class-select',
+				target: 'body-class',
+				variant: 'base',
+				outputMode: 'single',
 				classValues: (selectSetting.options as SelectOption[]).map(
 					(option) => option.value
 				),
+				allowEmpty: selectSetting.allowEmpty,
+				settingType: setting.type,
 			};
+			return { binding, bindings: [binding], derivedBindings: [] };
 		}
 		case SettingType.VARIABLE_TEXT: {
 			const textSetting = setting as VariableText;
-			return {
+			const binding: NormalizedStyleSettingsBinding = {
 				kind: 'css-variable',
+				target: 'css-variable',
+				variant: 'base',
+				outputMode: 'single',
 				variable: `--${setting.id}`,
+				variables: [`--${setting.id}`],
 				quotes: !!textSetting.quotes,
+				settingType: setting.type,
 			};
+			return { binding, bindings: [binding], derivedBindings: [] };
 		}
 		case SettingType.VARIABLE_NUMBER:
 		case SettingType.VARIABLE_NUMBER_SLIDER: {
 			const numberSetting = setting as VariableNumber | VariableNumberSlider;
-			return {
+			const binding: NormalizedStyleSettingsBinding = {
 				kind: 'css-variable',
+				target: 'css-variable',
+				variant: 'base',
+				outputMode: 'single',
 				variable: `--${setting.id}`,
+				variables: [`--${setting.id}`],
 				format: numberSetting.format || '',
+				settingType: setting.type,
 			};
+			return { binding, bindings: [binding], derivedBindings: [] };
 		}
 		case SettingType.VARIABLE_SELECT: {
 			const selectSetting = setting as VariableSelect;
-			return {
-				kind: 'css-variable-select',
+			const binding: NormalizedStyleSettingsBinding = {
+				kind: 'css-variable',
+				target: 'css-variable',
+				variant: 'base',
+				outputMode: 'single',
 				variable: `--${setting.id}`,
+				variables: [`--${setting.id}`],
 				quotes: !!selectSetting.quotes,
+				settingType: setting.type,
+			};
+			return { binding, bindings: [binding], derivedBindings: [] };
+		}
+		case SettingType.VARIABLE_COLOR: {
+			const colorSetting = setting as VariableColor;
+			const opacity = !!colorSetting.opacity;
+			const variables = getColorOutputVariables(setting.id, colorSetting.format, opacity);
+			const binding: NormalizedStyleSettingsBinding = {
+				kind: 'css-variable',
+				target: 'css-variable',
+				variant: 'base',
+				outputMode: variables.length > 1 ? 'multi' : 'single',
+				variable: variables[0],
+				variables,
+				format: colorSetting.format,
+				opacity,
+				settingType: setting.type,
+			};
+			return {
+				binding,
+				bindings: [binding],
+				derivedBindings: getAltFormatDerivedBindings(
+					setting.id,
+					colorSetting['alt-format'] || [],
+					opacity,
+					'base'
+				),
 			};
 		}
-		case SettingType.VARIABLE_COLOR:
-			return {
-				kind: 'css-variable-color',
-				variable: `--${setting.id}`,
+		case SettingType.VARIABLE_THEMED_COLOR: {
+			const themedSetting = setting as VariableThemedColor;
+			const opacity = !!themedSetting.opacity;
+			const variables = getColorOutputVariables(setting.id, themedSetting.format, opacity);
+			const selectors = {
+				light: 'body.theme-light.css-settings-manager',
+				dark: 'body.theme-dark.css-settings-manager',
 			};
-		case SettingType.VARIABLE_THEMED_COLOR:
-			return {
+			const binding: NormalizedStyleSettingsBinding = {
 				kind: 'themed-css-variable',
-				variable: `--${setting.id}`,
-				selectors: {
-					light: 'body.theme-light.css-settings-manager',
-					dark: 'body.theme-dark.css-settings-manager',
-				},
+				target: 'css-variable',
+				variant: 'base',
+				outputMode: variables.length > 1 ? 'multi' : 'single',
+				variable: variables[0],
+				variables,
+				format: themedSetting.format,
+				opacity,
+				selectors,
+				settingType: setting.type,
 			};
+			const bindings: NormalizedStyleSettingsBinding[] = ['light', 'dark'].map(
+				(variant) => ({
+					kind: 'themed-css-variable',
+					target: 'css-variable',
+					variant: variant as NormalizedStyleSettingsBindingVariant,
+					outputMode: variables.length > 1 ? 'multi' : 'single',
+					variable: variables[0],
+					variables,
+					format: themedSetting.format,
+					opacity,
+					selectors,
+					settingType: setting.type,
+				})
+			);
+			return {
+				binding,
+				bindings,
+				derivedBindings: [
+					...getAltFormatDerivedBindings(
+						setting.id,
+						themedSetting['alt-format'] || [],
+						opacity,
+						'light'
+					),
+					...getAltFormatDerivedBindings(
+						setting.id,
+						themedSetting['alt-format'] || [],
+						opacity,
+						'dark'
+					),
+				],
+			};
+		}
 		case SettingType.COLOR_GRADIENT: {
 			const gradientSetting = setting as ColorGradient;
-			return {
-				kind: 'derived-color-gradient',
-				variablePrefix: `--${setting.id}-*`,
-				from: gradientSetting.from,
-				to: gradientSetting.to,
+			const binding: NormalizedStyleSettingsBinding = {
+				kind: 'gradient-output',
+				target: 'css-variable',
+				variant: 'base',
+				outputMode: 'range',
+				variablePrefix: `--${setting.id}-`,
+				variablePattern: `--${setting.id}-{index}`,
+				sourceVariables: [`--${gradientSetting.from}`, `--${gradientSetting.to}`],
+				format: gradientSetting.format,
+				step: gradientSetting.step,
+				pad: gradientSetting.pad || 0,
+				derivedFrom: 'gradient',
+				settingType: setting.type,
 			};
+			return { binding, bindings: [binding], derivedBindings: [] };
 		}
-		default:
-			return {
-				kind: 'presentation',
+		default: {
+			const binding: NormalizedStyleSettingsBinding = {
+				kind: 'non-emitting',
+				target: 'none',
+				variant: 'base',
+				outputMode: 'none',
+				reason: 'setting type has no runtime style emission',
+				settingType: setting.type,
 			};
+			return { binding, bindings: [binding], derivedBindings: [] };
+		}
 	}
 }
 
 function normalizeSetting(setting: CSSSetting): NormalizedStyleSettings {
+	const bindingMetadata = getBindingMetadata(setting);
 	const normalized: NormalizedStyleSettings = {
 		id: setting.id,
 		title: 'title' in setting ? setting.title : undefined,
 		description: 'description' in setting ? setting.description : undefined,
 		type: setting.type,
-		binding: getBinding(setting),
+		binding: bindingMetadata.binding,
+		bindings: bindingMetadata.bindings,
+		derivedBindings: bindingMetadata.derivedBindings,
 		source: setting.source,
 	};
 
@@ -1747,7 +1951,7 @@ export function buildNormalizedStyleSettingsSchema(
 	result: ParsedStyleSettingsResult
 ): NormalizedStyleSettingsSchema {
 	return {
-		version: 1,
+		version: 2,
 		generatedAt: new Date().toISOString(),
 		sections: result.sections.map((section) => ({
 			id: section.id,

@@ -13,6 +13,9 @@ export {
 	validateStyleSettingsExportValues,
 } from './StyleSettingsValuesCompatibility';
 export type {
+	NormalizedStyleSettingsBinding,
+	NormalizedStyleSettingsBindingKind,
+	NormalizedStyleSettingsBindingVariant,
 	NormalizedStyleSettings,
 	NormalizedStyleSettingsSchema,
 	NormalizedStyleSettingsSection,
