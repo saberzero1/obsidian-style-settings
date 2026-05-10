@@ -1,8 +1,58 @@
 # Quartz extraction-oriented roadmap
 
-This fork now treats Style Settings definitions as data that should be machine-readable, diagnosable, and reproducible for downstream tooling such as Quartz Themes. This document summarizes what changed in this PR and outlines the next improvements that would further strengthen extraction workflows.
+This fork now treats Style Settings definitions as data that should be machine-readable, diagnosable, and reproducible for downstream tooling such as Quartz Themes. This document summarizes what changed across extraction-oriented PRs and outlines the next improvements that would further strengthen extraction workflows.
 
-## What changed in this PR
+## Hardening pass (PR #2)
+
+This pass addressed upstream bug classes that could poison settings, crash the parser, or produce incorrect output for Quartz automation.
+
+### 1. Numeric input validation (`variable-number`)
+
+Upstream issue class: [obsidian-community/obsidian-style-settings#189](https://github.com/obsidian-community/obsidian-style-settings/issues/189)
+
+The `onChange` handler in `VariableNumberSettingComponent` previously called `parseFloat`/`parseInt` on raw user input without checking for `NaN`. Typing an invalid value (e.g. letters, empty string) would save `NaN` to settings, poisoning the stored state and producing broken CSS variables.
+
+**Fix**: Validate the parsed result with `Number.isFinite` before persisting. Invalid input is silently ignored, leaving the last valid value in place.
+
+### 2. `variable-text` empty-string default propagation
+
+Upstream issue class: [obsidian-community/obsidian-style-settings#187](https://github.com/obsidian-community/obsidian-style-settings/issues/187)
+
+Two related bugs affected text settings with empty-string values:
+
+- The UI component used a truthy check (`value ?`) to decide whether to display the saved value or the default. Because empty string is falsy, explicitly saving an empty string would cause the UI to display the default instead of the saved value.
+- The CSS variable emission in `getCSSVariables` used `text !== '""'` to detect the empty-string sentinel, but did not also guard against an actual zero-length string, which could result in wrapping an empty string in quotes (`''`) when `quotes: true`.
+
+**Fix**: Changed the UI component check to `value !== undefined` and updated the quotes guard to `text && text !== '""'` so that both the sentinel and true empty string emit an empty value.
+
+### 3. `rgb-values` / `rgb-split` format correctness
+
+Upstream issue class: [obsidian-community/obsidian-style-settings#191](https://github.com/obsidian-community/obsidian-style-settings/issues/191)
+
+`chroma.js` `.rgb()` can return floating-point channel values (e.g. `254.99999`). The previous code emitted raw floats, producing output like `254.99999,0,0` instead of the documented `255, 0, 0`. This would break any downstream consumer (including Quartz) that feeds these values into `rgb()` or `rgba()`.
+
+**Fix**: Applied `Math.round()` to all three channels in both `rgb-values` and `rgb-split` cases, and added spaces after commas in `rgb-values` to match the documented format.
+
+### 4. Parser/schema hardening for "not iterable" crashes
+
+Upstream issue class: [obsidian-community/obsidian-style-settings#200](https://github.com/obsidian-community/obsidian-style-settings/issues/200)
+
+Two places assumed array-ness without defensive checks:
+
+- `removeClasses` in `CSSSettingsManager` called `multiToggle.options.forEach(...)` without verifying that `options` is actually an array, which would throw if a `class-select` setting reached the config with a malformed/missing options list.
+- `setConfig` called `s.settings.forEach(...)` unconditionally, which would throw if `settings` was `null` or `undefined` on a parsed section (possible with malformed or partially-parsed input).
+
+**Fix**: Wrapped both loops in `Array.isArray(...)` guards so that malformed input is silently skipped instead of throwing.
+
+### 5. YAML parsing safety
+
+Upstream issue class: [obsidian-community/obsidian-style-settings#206](https://github.com/obsidian-community/obsidian-style-settings/issues/206)
+
+Advisory database confirms `js-yaml@4.1.0` has no known vulnerabilities. The v4 series already removed all `!!js/` type tags that were the source of prototype-pollution issues in v3.x.
+
+**Fix**: Added an explicit `schema: yaml.DEFAULT_SCHEMA` option to the `yaml.load` call to make the safe schema selection visible and intention-clear, and to ensure any future js-yaml version changes cannot silently revert to a less safe default.
+
+## What changed in PR #1
 
 ### 1. Block-local parsing and provenance
 
