@@ -95,8 +95,8 @@ function locationLabel(
 	path?: string
 ): string | undefined {
 	if (!source) return path;
-	const lineRange = `${source.sourceName}:${source.lineStart}-${source.lineEnd}`;
-	return path ? `${lineRange} ${path}` : lineRange;
+	const lineRangeLabel = `${source.sourceName}:${source.lineStart}-${source.lineEnd}`;
+	return path ? `${lineRangeLabel} ${path}` : lineRangeLabel;
 }
 
 function createDiagnostic(context: DiagnosticContext): StyleSettingsDiagnostic {
@@ -179,6 +179,8 @@ function extractBlocks(
 
 function normalizeYaml(rawYaml: string): string {
 	const indent = detectIndent(rawYaml);
+	// Default tab-indented or indeterminate YAML blocks to four spaces so js-yaml
+	// can parse them consistently after we normalize tab characters.
 	const replacement =
 		indent.type === 'space' && indent.indent ? indent.indent : '    ';
 	return rawYaml.replace(/\t/g, replacement);

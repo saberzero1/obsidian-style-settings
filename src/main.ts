@@ -296,7 +296,8 @@ export default class CSSSettingsPlugin extends Plugin {
 			textarea.style.opacity = '0';
 			document.body.appendChild(textarea);
 			textarea.select();
-			// Deprecated fallback kept for environments where navigator.clipboard.writeText is unavailable or fails.
+			// Deprecated fallback retained for older desktop/webview environments where
+			// navigator.clipboard.writeText is unavailable or rejects despite copy still being allowed.
 			const copied = document.execCommand('copy');
 			textarea.remove();
 			return copied;
