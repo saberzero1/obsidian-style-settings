@@ -179,8 +179,8 @@ function extractBlocks(
 
 function normalizeYaml(rawYaml: string): string {
 	const indent = detectIndent(rawYaml);
-	// Default tab-indented or indeterminate YAML blocks to four spaces so js-yaml
-	// can parse them consistently after we normalize tab characters.
+	// Default tab-indented or YAML blocks with no detectable indentation pattern
+	// to four spaces so js-yaml can parse them consistently after tab normalization.
 	const replacement =
 		indent.type === 'space' && indent.indent ? indent.indent : '    ';
 	return rawYaml.replace(/\t/g, replacement);
