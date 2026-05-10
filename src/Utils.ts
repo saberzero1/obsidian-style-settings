@@ -6,6 +6,7 @@ import {
 } from './SettingHandlers';
 export {
 	isValidDefaultColor,
+	isValidSavedColor,
 	nameRegExp,
 	settingRegExp,
 } from './StyleSettingsShared';

@@ -4,6 +4,7 @@ import {
 	getPickrSettings,
 	getTitle,
 	isValidDefaultColor,
+	isValidSavedColor,
 	onPickrCancel,
 } from '../../Utils';
 import { t } from '../../lang/helpers';
@@ -46,8 +47,8 @@ export class VariableThemedColorSettingComponent extends AbstractSettingComponen
 
 		const idLight = `${this.setting.id}@@light`;
 		const idDark = `${this.setting.id}@@dark`;
-		const valueLight = this.settingsManager.getSetting(this.sectionId, idLight);
-		const valueDark = this.settingsManager.getSetting(this.sectionId, idDark);
+		const savedLight = this.settingsManager.getSetting(this.sectionId, idLight);
+		const savedDark = this.settingsManager.getSetting(this.sectionId, idDark);
 		const swatchesLight: string[] = [];
 		const swatchesDark: string[] = [];
 
@@ -55,16 +56,16 @@ export class VariableThemedColorSettingComponent extends AbstractSettingComponen
 			swatchesLight.push(this.setting['default-light']);
 		}
 
-		if (valueLight !== undefined) {
-			swatchesLight.push(valueLight as string);
+		if (savedLight !== undefined) {
+			swatchesLight.push(savedLight as string);
 		}
 
 		if (this.setting['default-dark']) {
 			swatchesDark.push(this.setting['default-dark']);
 		}
 
-		if (valueDark !== undefined) {
-			swatchesDark.push(valueDark as string);
+		if (savedDark !== undefined) {
+			swatchesDark.push(savedDark as string);
 		}
 
 		this.settingEl = new Setting(this.containerEl);
@@ -93,12 +94,15 @@ export class VariableThemedColorSettingComponent extends AbstractSettingComponen
 			cls: 'themed-color-wrapper',
 		});
 
-		// Create light color picker
+		// Create light color picker.
+		// Pass savedLight as-is (undefined when unset) so that createColorPickerLight
+		// can fall back to the correct default instead of receiving an empty string
+		// which would cause the preview button to show an empty/black color (issue #53).
 		this.createColorPickerLight(
 			wrapper,
 			this.containerEl,
 			swatchesLight,
-			valueLight || '',
+			savedLight as string | undefined,
 			idLight
 		);
 
@@ -107,7 +111,7 @@ export class VariableThemedColorSettingComponent extends AbstractSettingComponen
 			wrapper,
 			this.containerEl,
 			swatchesDark,
-			valueDark || '',
+			savedDark as string | undefined,
 			idDark
 		);
 
@@ -126,26 +130,31 @@ export class VariableThemedColorSettingComponent extends AbstractSettingComponen
 		wrapper: HTMLDivElement,
 		containerEl: HTMLElement,
 		swatchesLight: string[],
-		valueLight: number | string | boolean,
+		valueLight: string | undefined,
 		idLight: string
 	) {
 		const themeLightWrapper = wrapper.createDiv({ cls: 'theme-light' });
 
-		// fix, so that the color is correctly shown before the color picker has been opened
-		const defaultColor =
-			valueLight !== undefined
-				? (valueLight as string)
+		// Validate saved color before using it; fall back to default for corrupt values.
+		const displayColor =
+			valueLight && isValidSavedColor(valueLight)
+				? valueLight
 				: this.setting['default-light'];
-		themeLightWrapper.style.setProperty('--pcr-color', defaultColor);
 
+		// Scope --pcr-color to this picker's wrapper element so that multiple
+		// themed-color pickers in the same container don't bleed into each other
+		// (issues #168, #122).
+		themeLightWrapper.style.setProperty('--pcr-color', displayColor);
+
+		const pickerEl = themeLightWrapper.createDiv({ cls: 'picker' });
 		const pickrLight = (this.pickrLight = Pickr.create(
 			getPickrSettings({
 				isView: this.isView,
-				el: themeLightWrapper.createDiv({ cls: 'picker' }),
+				el: pickerEl,
 				containerEl,
 				swatches: swatchesLight,
 				opacity: this.setting.opacity,
-				defaultColor: defaultColor,
+				defaultColor: displayColor,
 			})
 		));
 
@@ -157,7 +166,7 @@ export class VariableThemedColorSettingComponent extends AbstractSettingComponen
 		});
 
 		pickrLight.on('save', (color: Pickr.HSVaColor, instance: Pickr) =>
-			this.onSave(idLight, color, instance)
+			this.onSave(idLight, color, instance, themeLightWrapper)
 		);
 
 		pickrLight.on('cancel', onPickrCancel);
@@ -167,7 +176,9 @@ export class VariableThemedColorSettingComponent extends AbstractSettingComponen
 		);
 		themeLightReset.setIcon('reset');
 		themeLightReset.onClick(() => {
-			pickrLight.setColor(this.setting['default-light']);
+			const resetColor = this.setting['default-light'];
+			pickrLight.setColor(resetColor);
+			themeLightWrapper.style.setProperty('--pcr-color', resetColor);
 			this.settingsManager.clearSetting(this.sectionId, idLight);
 		});
 		themeLightReset.setTooltip(resetTooltip);
@@ -177,26 +188,28 @@ export class VariableThemedColorSettingComponent extends AbstractSettingComponen
 		wrapper: HTMLDivElement,
 		containerEl: HTMLElement,
 		swatchesDark: string[],
-		valueDark: number | string | boolean,
+		valueDark: string | undefined,
 		idDark: string
 	) {
 		const themeDarkWrapper = wrapper.createDiv({ cls: 'theme-dark' });
 
-		// fix, so that the color is correctly shown before the color picker has been opened
-		const defaultColor =
-			valueDark !== undefined
-				? (valueDark as string)
+		// Validate saved color before using it; fall back to default for corrupt values.
+		const displayColor =
+			valueDark && isValidSavedColor(valueDark)
+				? valueDark
 				: this.setting['default-dark'];
-		themeDarkWrapper.style.setProperty('--pcr-color', defaultColor);
 
+		themeDarkWrapper.style.setProperty('--pcr-color', displayColor);
+
+		const pickerEl = themeDarkWrapper.createDiv({ cls: 'picker' });
 		const pickrDark = (this.pickrDark = Pickr.create(
 			getPickrSettings({
 				isView: this.isView,
-				el: themeDarkWrapper.createDiv({ cls: 'picker' }),
+				el: pickerEl,
 				containerEl,
 				swatches: swatchesDark,
 				opacity: this.setting.opacity,
-				defaultColor: defaultColor,
+				defaultColor: displayColor,
 			})
 		));
 
@@ -208,7 +221,7 @@ export class VariableThemedColorSettingComponent extends AbstractSettingComponen
 		});
 
 		pickrDark.on('save', (color: Pickr.HSVaColor, instance: Pickr) =>
-			this.onSave(idDark, color, instance)
+			this.onSave(idDark, color, instance, themeDarkWrapper)
 		);
 
 		pickrDark.on('cancel', onPickrCancel);
@@ -218,22 +231,38 @@ export class VariableThemedColorSettingComponent extends AbstractSettingComponen
 		);
 		themeDarkReset.setIcon('reset');
 		themeDarkReset.onClick(() => {
-			pickrDark.setColor(this.setting['default-dark']);
+			const resetColor = this.setting['default-dark'];
+			pickrDark.setColor(resetColor);
+			themeDarkWrapper.style.setProperty('--pcr-color', resetColor);
 			this.settingsManager.clearSetting(this.sectionId, idDark);
 		});
 		themeDarkReset.setTooltip(resetTooltip);
 	}
 
-	private onSave(id: string, color: Pickr.HSVaColor, instance: Pickr) {
+	private onSave(
+		id: string,
+		color: Pickr.HSVaColor,
+		instance: Pickr,
+		wrapperEl: HTMLElement
+	) {
 		if (!color) return;
 
-		this.settingsManager.setSetting(
-			this.sectionId,
-			id,
-			color.toHEXA().toString()
-		);
+		const hex = color.toHEXA().toString();
+
+		// Discard corrupt values (e.g. "#NANNANNAN") that can result from
+		// incomplete/malformed manual input (issue #151, #175).
+		if (!isValidSavedColor(hex)) {
+			console.warn(
+				`Style Settings: discarding invalid color value "${hex}" for --${this.setting.id}`
+			);
+			instance.hide();
+			return;
+		}
+
+		this.settingsManager.setSetting(this.sectionId, id, hex);
+		wrapperEl.style.setProperty('--pcr-color', hex);
 
 		instance.hide();
-		instance.addSwatch(color.toHEXA().toString());
+		instance.addSwatch(hex);
 	}
 }
