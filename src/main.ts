@@ -26,8 +26,7 @@ export default class CSSSettingsPlugin extends Plugin {
 	settingsList: ParsedCSSSettings[] = [];
 	errorList: ErrorList = [];
 	commandList: Command[] = [];
-	normalizedSchema: NormalizedStyleSettingsSchema =
-		buildNormalizedStyleSettingsSchema({ sections: [], diagnostics: [] });
+	normalizedSchema: NormalizedStyleSettingsSchema | null = null;
 	lightEl: HTMLElement;
 	darkEl: HTMLElement;
 
@@ -153,7 +152,10 @@ export default class CSSSettingsPlugin extends Plugin {
 	}
 
 	getParsedSettingsSchema() {
-		return this.normalizedSchema;
+		return (
+			this.normalizedSchema ||
+			buildNormalizedStyleSettingsSchema({ sections: [], diagnostics: [] })
+		);
 	}
 
 	/**
@@ -294,6 +296,7 @@ export default class CSSSettingsPlugin extends Plugin {
 			textarea.style.opacity = '0';
 			document.body.appendChild(textarea);
 			textarea.select();
+			// Deprecated fallback kept for environments where navigator.clipboard is unavailable.
 			const copied = document.execCommand('copy');
 			textarea.remove();
 			return copied;
