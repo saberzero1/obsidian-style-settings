@@ -6,7 +6,7 @@ export type DiagnosticSeverity = 'error' | 'warning';
 export type StyleSettingsSourceKind = 'embedded-css' | 'standalone-yaml';
 
 export interface StyleSettingsSourceMetadata {
-	sourceKind?: StyleSettingsSourceKind;
+	sourceKind: StyleSettingsSourceKind;
 	sourceName: string;
 	sourceId: string;
 	blockIndex: number;
