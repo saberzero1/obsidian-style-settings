@@ -144,7 +144,11 @@ const colorFormats = new Set([
 	'rgb-values',
 ]);
 
+const COLOR_FORMATS_LIST = 'hex | hsl | hsl-split | hsl-split-decimal | hsl-values | rgb | rgb-split | rgb-values';
+
 const gradientFormats = new Set(['hex', 'hsl', 'rgb']);
+
+const GRADIENT_FORMATS_LIST = 'hex | hsl | rgb';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -601,7 +605,7 @@ function validateAltFormats(
 				createDiagnostic({
 					severity: 'error',
 					code: 'INVALID_ALT_FORMAT',
-					message: `alt-format entries require a supported color format, received "${format}".`,
+					message: `alt-format entries require a supported color format, received "${format}". Supported formats: ${COLOR_FORMATS_LIST}.`,
 					source,
 					sectionId,
 					settingId,
@@ -1046,13 +1050,26 @@ function validateSetting(
 		}
 		case SettingType.VARIABLE_COLOR: {
 			const format = getString(value.format);
-			if (!format || !colorFormats.has(format)) {
+			if (!format) {
 				diagnostics.push(
 					createDiagnostic({
 						severity: 'error',
 						code: 'MISSING_COLOR_FORMAT',
-						message:
-							'variable-color settings require a supported format value.',
+						message: `variable-color settings require a "format" field. Add \`format: <value>\` to this setting. Supported formats: ${COLOR_FORMATS_LIST}.`,
+						source,
+						sectionId,
+						settingId: id,
+						path,
+					})
+				);
+				return { diagnostics };
+			}
+			if (!colorFormats.has(format)) {
+				diagnostics.push(
+					createDiagnostic({
+						severity: 'error',
+						code: 'UNSUPPORTED_COLOR_FORMAT',
+						message: `variable-color "format" value "${format}" is not supported. Replace it with one of: ${COLOR_FORMATS_LIST}.`,
 						source,
 						sectionId,
 						settingId: id,
@@ -1106,13 +1123,54 @@ function validateSetting(
 			const format = getString(value.format);
 			const light = getString(value['default-light']);
 			const dark = getString(value['default-dark']);
-			if (!format || !colorFormats.has(format) || !light || !dark) {
+			if (!format) {
+				diagnostics.push(
+					createDiagnostic({
+						severity: 'error',
+						code: 'MISSING_COLOR_FORMAT',
+						message: `variable-themed-color settings require a "format" field. Add \`format: <value>\` to this setting. Supported formats: ${COLOR_FORMATS_LIST}.`,
+						source,
+						sectionId,
+						settingId: id,
+						path,
+					})
+				);
+				return { diagnostics };
+			}
+			if (!colorFormats.has(format)) {
+				diagnostics.push(
+					createDiagnostic({
+						severity: 'error',
+						code: 'UNSUPPORTED_COLOR_FORMAT',
+						message: `variable-themed-color "format" value "${format}" is not supported. Replace it with one of: ${COLOR_FORMATS_LIST}.`,
+						source,
+						sectionId,
+						settingId: id,
+						path,
+					})
+				);
+				return { diagnostics };
+			}
+			if (!light) {
 				diagnostics.push(
 					createDiagnostic({
 						severity: 'error',
 						code: 'MISSING_THEMED_COLOR_FIELDS',
-						message:
-							'variable-themed-color settings require a supported format plus default-light and default-dark values.',
+						message: 'variable-themed-color settings require a "default-light" field. Add `default-light: <css-color>` (e.g. #ffffff or hsl(0, 0%, 100%)) to this setting.',
+						source,
+						sectionId,
+						settingId: id,
+						path,
+					})
+				);
+				return { diagnostics };
+			}
+			if (!dark) {
+				diagnostics.push(
+					createDiagnostic({
+						severity: 'error',
+						code: 'MISSING_THEMED_COLOR_FIELDS',
+						message: 'variable-themed-color settings require a "default-dark" field. Add `default-dark: <css-color>` (e.g. #000000 or hsl(0, 0%, 0%)) to this setting.',
 						source,
 						sectionId,
 						settingId: id,
@@ -1168,13 +1226,68 @@ function validateSetting(
 			const format = getString(value.format);
 			const step = getNumber(value.step);
 			const pad = getNumber(value.pad);
-			if (!from || !to || !format || !gradientFormats.has(format) || step === undefined) {
+			if (!from) {
 				diagnostics.push(
 					createDiagnostic({
 						severity: 'error',
 						code: 'MISSING_GRADIENT_FIELDS',
-						message:
-							'color-gradient settings require from, to, a supported format, and step values.',
+						message: 'color-gradient settings require a "from" field. Add `from: <css-color>` (e.g. #000000) to this setting.',
+						source,
+						sectionId,
+						settingId: id,
+						path,
+					})
+				);
+				return { diagnostics };
+			}
+			if (!to) {
+				diagnostics.push(
+					createDiagnostic({
+						severity: 'error',
+						code: 'MISSING_GRADIENT_FIELDS',
+						message: 'color-gradient settings require a "to" field. Add `to: <css-color>` (e.g. #ffffff) to this setting.',
+						source,
+						sectionId,
+						settingId: id,
+						path,
+					})
+				);
+				return { diagnostics };
+			}
+			if (!format) {
+				diagnostics.push(
+					createDiagnostic({
+						severity: 'error',
+						code: 'MISSING_GRADIENT_FIELDS',
+						message: `color-gradient settings require a "format" field. Add \`format: <value>\` to this setting. Supported gradient formats: ${GRADIENT_FORMATS_LIST}.`,
+						source,
+						sectionId,
+						settingId: id,
+						path,
+					})
+				);
+				return { diagnostics };
+			}
+			if (!gradientFormats.has(format)) {
+				diagnostics.push(
+					createDiagnostic({
+						severity: 'error',
+						code: 'UNSUPPORTED_GRADIENT_FORMAT',
+						message: `color-gradient "format" value "${format}" is not supported. Replace it with one of: ${GRADIENT_FORMATS_LIST}.`,
+						source,
+						sectionId,
+						settingId: id,
+						path,
+					})
+				);
+				return { diagnostics };
+			}
+			if (step === undefined) {
+				diagnostics.push(
+					createDiagnostic({
+						severity: 'error',
+						code: 'MISSING_GRADIENT_FIELDS',
+						message: 'color-gradient settings require a numeric "step" field. Add `step: <number>` (e.g. step: 1) to this setting.',
 						source,
 						sectionId,
 						settingId: id,
