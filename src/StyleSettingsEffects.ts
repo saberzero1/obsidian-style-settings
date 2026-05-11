@@ -455,7 +455,7 @@ function effectFromBinding(
 				interactionMode: 'independent',
 				// Preserve the unknown kind for diagnostic use by callers.
 				// eslint-disable-next-line @typescript-eslint/no-explicit-any
-				...(kind !== undefined ? ({ _unknownKind: kind } as any) : {}),
+				...(kind !== undefined ? ({ unknownKind: kind } as any) : {}),
 			};
 		}
 	}

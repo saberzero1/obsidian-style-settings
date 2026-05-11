@@ -506,12 +506,14 @@ describe('variable-themed-color effects (with alt-format)', () => {
 // ---------------------------------------------------------------------------
 
 describe('color-gradient effects', () => {
+	// In real usage, 'from' and 'to' are setting IDs that reference other
+	// color settings. The binding stores them as '--<id>' CSS variable names.
 	const yaml = wrapInSection(`
 - id: my-gradient
   type: color-gradient
   format: hex
-  from: "#000000"
-  to: "#ffffff"
+  from: gradient-from-color
+  to: gradient-to-color
   step: 1
 `);
 
@@ -538,9 +540,14 @@ describe('color-gradient effects', () => {
 		expect(effect.derivedFrom).toBe('gradient');
 	});
 
-	it('sourceVariables are the from/to variable names', () => {
+	it('sourceVariables reference the from/to color setting CSS variables', () => {
 		const [effect] = firstSettingEffects(yaml);
-		expect(effect.sourceVariables).toEqual(['--#000000', '--#ffffff']);
+		// 'from' and 'to' are setting IDs; the binding prepends '--' to form
+		// the CSS variable names that the gradient range is interpolated between.
+		expect(effect.sourceVariables).toEqual([
+			'--gradient-from-color',
+			'--gradient-to-color',
+		]);
 	});
 
 	it('format is preserved', () => {
