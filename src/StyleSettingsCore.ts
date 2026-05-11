@@ -8,6 +8,16 @@ export {
 	parseStyleSettingsStylesheetText,
 	parseStyleSettingsWithStandaloneYamlSidecar,
 } from './StyleSettingsParser';
+export { buildSchemaEffects, buildSettingEffects } from './StyleSettingsEffects';
+export type {
+	SettingEffect,
+	SettingEffectInteractionMode,
+	SettingEffectKind,
+	SettingEffectMode,
+	SettingEffectOperation,
+	SettingEffectRecord,
+	SettingEffectTargetKind,
+} from './StyleSettingsEffects';
 export {
 	parseStyleSettingsExportKeyIdentity,
 	validateStyleSettingsExportValues,
