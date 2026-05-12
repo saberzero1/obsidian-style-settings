@@ -16,6 +16,8 @@ import { SettingValue } from './SettingsManager';
 import CSSSettingsPlugin from './main';
 import { MarkdownView, TFile, WorkspaceLeaf } from 'obsidian';
 
+const REQUIRED_STABLE_RENDER_PASSES = 2;
+
 interface SelectorSnapshot {
 groupId: string;
 groupLabel: string;
@@ -390,10 +392,10 @@ stablePasses += 1;
 stablePasses = 0;
 lastSignature = signature;
 }
-if (stablePasses >= 2) {
-return;
-}
-}
+			if (stablePasses >= REQUIRED_STABLE_RENDER_PASSES) {
+				return;
+			}
+		}
 }
 
 private buildRenderSignature(root: HTMLElement): string {
@@ -515,12 +517,12 @@ strategy: settingApplication.strategy,
 fixtures: fixtureReports,
 summary: {
 fixtureCount: fixtureReports.length,
-selectorCount,
-observableSelectors,
-unobservableSelectors: Math.max(selectorCount - observableSelectors, 0),
-selectorsWithTrackedPropertyChanges,
-selectorsMatchedWithoutTrackedPropertyChanges,
-},
+				selectorCount,
+				observableSelectors,
+				unobservableSelectors: selectorCount - observableSelectors,
+				selectorsWithTrackedPropertyChanges,
+				selectorsMatchedWithoutTrackedPropertyChanges,
+			},
 };
 }
 

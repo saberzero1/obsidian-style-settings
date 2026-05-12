@@ -11,6 +11,9 @@ VariableText,
 import { SettingValue } from './SettingsManager';
 import { SettingType } from './settingsView/SettingComponents/types';
 
+const VERIFICATION_COLOR_PRIMARY = '#ff00ff';
+const VERIFICATION_COLOR_SECONDARY = '#00ffff';
+
 export interface RuntimeVerificationFixture {
 id: string;
 title: string;
@@ -351,14 +354,17 @@ value: next,
 strategy: 'auto-derived',
 };
 }
-case SettingType.VARIABLE_COLOR: {
-const color = setting as VariableColor;
-const key = buildSettingStorageKey(section.id, setting.id);
-const current = (currentSettings[key] ?? color.default ?? '').toString().trim();
-const next = current.toLowerCase() === '#ff00ff' ? '#00ffff' : '#ff00ff';
-return {
-sectionId: section.id,
-settingId: setting.id,
+				case SettingType.VARIABLE_COLOR: {
+					const color = setting as VariableColor;
+					const key = buildSettingStorageKey(section.id, setting.id);
+					const current = (currentSettings[key] ?? color.default ?? '').toString().trim();
+					const next =
+						current.toLowerCase() === VERIFICATION_COLOR_PRIMARY
+							? VERIFICATION_COLOR_SECONDARY
+							: VERIFICATION_COLOR_PRIMARY;
+					return {
+						sectionId: section.id,
+						settingId: setting.id,
 value: next,
 strategy: 'auto-derived',
 };
