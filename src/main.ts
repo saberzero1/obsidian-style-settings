@@ -6,6 +6,8 @@ import {
 	finalizeParsedStyleSettings,
 	parseStyleSettingsStylesheetText,
 } from './StyleSettingsParser';
+import { RuntimeVerificationHarness } from './RuntimeVerificationHarness';
+import { RuntimeVerificationPayload } from './RuntimeVerificationModel';
 import {
 	ErrorList,
 	getDescription,
@@ -54,6 +56,14 @@ export default class CSSSettingsPlugin extends Plugin {
 			name: 'Copy normalized Style Settings schema JSON',
 			callback: async () => {
 				await this.copyParsedSettingsSchema();
+			},
+		});
+
+		this.addCommand({
+			id: 'copy-runtime-verification-report',
+			name: 'Copy runtime verification report JSON',
+			callback: async () => {
+				await this.copyRuntimeVerificationReport();
 			},
 		});
 
@@ -280,6 +290,23 @@ export default class CSSSettingsPlugin extends Plugin {
 			new Notice('Copied normalized Style Settings schema JSON');
 		} else {
 			new Notice('Failed to copy normalized Style Settings schema JSON');
+		}
+	}
+
+	async runRuntimeVerification(payload?: RuntimeVerificationPayload) {
+		const harness = new RuntimeVerificationHarness(this);
+		return harness.run(payload);
+	}
+
+	private async copyRuntimeVerificationReport() {
+		const report = await this.runRuntimeVerification();
+		const reportJson = JSON.stringify(report, null, 2);
+		const copied = await this.writeToClipboard(reportJson);
+		if (copied) {
+			console.info('Style Settings runtime verification report', report);
+			new Notice('Copied runtime verification report JSON');
+		} else {
+			new Notice('Failed to copy runtime verification report JSON');
 		}
 	}
 
