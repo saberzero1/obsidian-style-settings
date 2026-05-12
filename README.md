@@ -20,6 +20,15 @@ The normalized schema export is intended for downstream tooling that needs predi
 
 Inside Obsidian, run the export command to copy the current normalized schema to the clipboard for debugging. For code-driven consumers, use the parser helpers directly to parse stylesheet text and build the normalized schema JSON.
 
+This fork also includes a first-slice privileged runtime verification command named **Copy runtime verification report JSON**. The command runs a bounded, fixture-aware selector observation pass and copies structured JSON that includes:
+
+- fixture open status and view/surface attribution
+- per-selector baseline/changed match counts
+- tracked-property baseline vs changed comparisons
+- selectors that matched but had no tracked-property impact
+
+The runtime mapping-set model lives in [`src/RuntimeVerificationModel.ts`](src/RuntimeVerificationModel.ts) and is intentionally minimal/Quartz-aligned so later Quartz-driven payloads can replace or extend it.
+
 For example, adding this to a CSS snippet in your vault's snippets directory (`%yourVault%/.obsidian/snippets`):
 
 ```css
