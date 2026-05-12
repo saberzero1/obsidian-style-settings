@@ -6,6 +6,52 @@ The goal is not to make the plugin safer or more portable for general Obsidian u
 
 ---
 
+## Existing Quartz Themes pipeline context
+
+`saberzero1/quartz-themes` already has a meaningful extraction and verification pipeline. This strategy should therefore be read as an extension of that pipeline, not a replacement for it.
+
+### What Quartz already does today
+
+From the current `justfile` and `runner/scripts/`:
+
+- `just cli-extract`, `cli-extract-all`, and related tasks drive extraction through **Obsidian CLI**
+- `just style-settings` populates Style Settings metadata for Quartz-side use
+- `runner/scripts/cli-extractor.js`:
+  - writes `.obsidian/appearance.json`
+  - writes Style Settings plugin state into `.obsidian/plugins/obsidian-style-settings/data.json`
+  - enables required plugins
+  - opens a broad fixture set inside the vault
+  - waits for Obsidian readiness
+  - extracts computed styles for configured selector/property targets
+  - deduplicates theme output against a default Obsidian baseline
+- `runner/scripts/config.js` already defines a substantial mapping layer of:
+  - `obsidianSelector`
+  - `publishSelector`
+  - `quartzSelector`
+  - `pseudoElement`
+  - `properties`
+- `runner/scripts/verify-style-settings.mjs` already verifies runtime-evidence readiness using:
+  - `style_settings.effects` from `themes.json`
+  - `buildSelectorImpactGraph(...)`
+  - `effectSettingIdsFromEffectRecords(...)`
+  - `enumerateRuntimeObservationPayloads(...)`
+  - per-mode runtime evidence sidecars
+  - a smaller representative fixture subset for bounded live verification
+
+### Implication for this document
+
+The plugin-side strategy should not assume Quartz needs a brand-new end-to-end extraction architecture. Quartz already owns:
+
+- static selector/property mapping into Quartz surfaces
+- Obsidian CLI orchestration
+- fixture inventory
+- baseline diffing
+- runtime evidence planning from canonical Style Settings effects
+
+The missing piece is a more privileged **in-Obsidian observation layer** that can make Quartz's existing plans more reliable and more informative.
+
+---
+
 ## Problem statement
 
 Quartz-side extraction now has several major capabilities:
@@ -26,6 +72,7 @@ Quartz-side runtime evidence works by rendering known fixture surfaces and check
 - selectors behind collapsed, virtualized, deferred, tabbed, or off-screen UI may be under-observed
 - app-shell selectors may depend on sidebars, active leaves, modal state, workspace layout, or plugin UI state
 - some selectors only become meaningful after a specific internal Obsidian lifecycle transition
+- Quartz's current CLI flow can open many fixtures, but it still fundamentally observes from outside the Obsidian runtime boundary and relies on generic readiness heuristics
 
 As a result, a theme can be statically extracted correctly while still producing weak or incomplete runtime evidence.
 
@@ -55,6 +102,25 @@ This is the Obsidian-side problem of determining:
 This is fundamentally a harness and instrumentation problem.
 
 Quartz can reason about selectors statically. Obsidian is the better place to force those selectors to become visible, measure them, and explain why they did or did not fire.
+
+### The practical bottleneck in the current split
+
+Today Quartz already performs three important jobs well:
+
+1. **static target definition**
+   - canonical Style Settings effects from `style_settings.effects`
+   - selector-impact graph construction
+   - property-target configuration via `runner/scripts/config.js`
+2. **external orchestration**
+   - Obsidian CLI commands
+   - theme/mode/snippet/style-settings state setup
+   - fixture opening
+3. **downstream normalization**
+   - baseline diffing
+   - result sidecars
+   - verification reports
+
+What Quartz does **not** control precisely enough yet is the internal Obsidian state needed to guarantee that selector targets are actually materialized and stable when the observation occurs.
 
 ---
 
@@ -280,6 +346,14 @@ The best direction is a **hybrid**:
 
 That preserves real-app fidelity while still allowing privileged fallbacks when accuracy demands them.
 
+Concretely, the plugin should plug into Quartz's **existing** flow:
+
+- Quartz continues to derive candidate observations from `style_settings.effects`
+- Quartz continues to build selector-impact graphs and own the Obsidian→Quartz target mapping layer
+- the plugin becomes the privileged executor and explainer for whether those candidate selectors actually materialized inside Obsidian
+
+In other words, the plugin should initially improve the **execution and evidence** side of the pipeline, not replace Quartz's current planning and analysis model.
+
 ---
 
 ## Recommended staged plan
@@ -291,6 +365,7 @@ Primary goal: explain what the current run can and cannot observe.
 Plugin responsibilities:
 
 - accept a selector verification plan or selector candidate list from Quartz
+- align with Quartz's existing observation-planning units rather than inventing a parallel schema if avoidable
 - record active surfaces, leaves, view types, and mode during each observation window
 - report selector outcomes with categories such as:
   - `matched`
@@ -313,6 +388,7 @@ Plugin responsibilities:
 
 - create a deterministic verification workspace
 - open a known set of fixture notes and auxiliary leaves
+- reuse Quartz's existing fixture inventory and representative verification subset as the initial source of truth
 - switch through required preview/editor/mode combinations
 - add stabilization checkpoints for DOM quietness and view readiness
 - optionally scroll/expand known lazy or virtualized regions
@@ -405,15 +481,29 @@ In short: this repo should produce the **raw runtime truth signals** that are ea
 
 Owns normalization, analysis, storage, and extraction orchestration:
 
+- the current `justfile` task surface that runs extraction and verification
+- the static `runner/scripts/config.js` mapping from Obsidian selectors/properties to Quartz targets
 - static parsing and selector-impact analysis
 - transitive variable tracing
 - generation of verification plans and candidate selectors
+- current Obsidian CLI process orchestration (`runner/scripts/cli-extractor.js`)
 - ingestion of plugin-produced evidence payloads
 - evidence sidecar normalization and persistence
 - conflict analysis, confidence scoring, and extraction decisions
 - reporting across themes, modes, fixtures, and runs
 
 In short: Quartz should decide **what needs to be checked** and how to interpret the results, while the plugin should decide **how to observe it most accurately in Obsidian**.
+
+### Near-term boundary recommendation
+
+In the first harness milestone, `obsidian-style-settings` should **not** try to absorb:
+
+- Quartz's static selector/property map
+- Quartz's baseline diffing
+- Quartz's report generation
+- Quartz's theme-wide extraction scheduling
+
+Instead, it should provide richer privileged evidence back into the same Quartz-side commands that already exist today.
 
 ---
 
@@ -432,6 +522,7 @@ The plugin should emit data rich enough for Quartz to distinguish different runt
 - selector
 - observation outcome
 - matched node count
+- optional reference back to the Quartz planning unit (setting ID / payload ID / selector-impact key)
 
 ### High-value optional fields
 
@@ -528,7 +619,7 @@ Recommended fallback:
 
 The first implementation milestone should be:
 
-> **Build Phase 1 + the narrowest useful slice of Phase 2: a plugin-side selector observability report with deterministic verification workspace setup, basic fixture/view orchestration, and render stabilization checkpoints.**
+> **Build Phase 1 + the narrowest useful slice of Phase 2: a plugin-side selector observability report with deterministic verification workspace setup, basic fixture/view orchestration, and render stabilization checkpoints, but keep Quartz's existing planning (`style_settings.effects` → selector-impact graph → observation payloads) as the control plane.**
 
 That is the highest-value next step because it answers the most important open questions quickly:
 
@@ -541,15 +632,17 @@ That is the highest-value next step because it answers the most important open q
 
 ## Actionable next steps
 
-1. Define a first plugin-facing verification-plan payload that Quartz can send or embed for a run.
+1. Define the smallest plugin-facing verification payload that can be derived from Quartz's **existing** plan model.
    - mode list
    - fixture list
-   - selector candidates grouped by setting
+   - selector candidates grouped by setting or selector-impact entry
    - requested surface categories
+   - stable IDs that Quartz can round-trip into its current reports
 2. Implement a deterministic verification workspace bootstrap inside `obsidian-style-settings`.
-3. Add selector observability reporting with outcome categories, matched counts, and surface attribution.
-4. Add basic render stabilization checkpoints before each observation pass.
-5. Export the resulting raw evidence in a Quartz-ingestable JSON format.
-6. Run it first on a small set of high-value themes with known under-observation patterns.
+3. Mirror Quartz's current representative verification fixtures first, before expanding beyond them.
+4. Add selector observability reporting with outcome categories, matched counts, and surface attribution.
+5. Add basic render stabilization checkpoints before each observation pass, replacing Quartz-side blind readiness guesses with privileged in-app checks where possible.
+6. Export the resulting raw evidence in a Quartz-ingestable JSON format designed to slot into the existing `verify-style-settings.mjs` / runtime-evidence sidecar workflow.
+7. Run it first on a small set of high-value themes with known under-observation patterns.
 
 If this milestone is successful, Phase 3 and Phase 4 can be prioritized using actual coverage data instead of speculation.
