@@ -132,14 +132,14 @@ sections:
 
 	it('produces MISSING_COLOR_FORMAT when format is absent', () => {
 		const result = makeColorSetting('default: "#ff0000"');
-		expect(errorCodes(result)).toContain('MISSING_COLOR_FORMAT');
-		expect(result.sections).toHaveLength(0);
+		expect(warningCodes(result)).toContain('MISSING_COLOR_FORMAT');
+		expect(result.sections).toHaveLength(1);
 	});
 
 	it('produces UNSUPPORTED_COLOR_FORMAT when format value is not in the supported set', () => {
 		const result = makeColorSetting('format: oklch\ndefault: "#ff0000"');
-		expect(errorCodes(result)).toContain('UNSUPPORTED_COLOR_FORMAT');
-		expect(result.sections).toHaveLength(0);
+		expect(warningCodes(result)).toContain('UNSUPPORTED_COLOR_FORMAT');
+		expect(result.sections).toHaveLength(1);
 	});
 
 	it('MISSING_COLOR_FORMAT message includes the list of supported formats', () => {
@@ -159,7 +159,7 @@ sections:
 
 	it('produces INVALID_DEFAULT when default is not a CSS color string', () => {
 		const result = makeColorSetting('format: hex\ndefault: "not-a-color"');
-		expect(errorCodes(result)).toContain('INVALID_DEFAULT');
+		expect(warningCodes(result)).toContain('INVALID_DEFAULT');
 	});
 
 	it.each([
@@ -208,21 +208,21 @@ sections:
 		const result = makeThemedColorSetting(
 			'default-light: "#ffffff"\ndefault-dark: "#000000"'
 		);
-		expect(errorCodes(result)).toContain('MISSING_COLOR_FORMAT');
+		expect(warningCodes(result)).toContain('MISSING_COLOR_FORMAT');
 	});
 
 	it('produces UNSUPPORTED_COLOR_FORMAT when format is unrecognised', () => {
 		const result = makeThemedColorSetting(
 			'format: oklch\ndefault-light: "#ffffff"\ndefault-dark: "#000000"'
 		);
-		expect(errorCodes(result)).toContain('UNSUPPORTED_COLOR_FORMAT');
+		expect(warningCodes(result)).toContain('UNSUPPORTED_COLOR_FORMAT');
 	});
 
 	it('produces MISSING_THEMED_COLOR_FIELDS when default-light is absent', () => {
 		const result = makeThemedColorSetting(
 			'format: hex\ndefault-dark: "#000000"'
 		);
-		expect(errorCodes(result)).toContain('MISSING_THEMED_COLOR_FIELDS');
+		expect(warningCodes(result)).toContain('MISSING_THEMED_COLOR_FIELDS');
 		const diag = result.diagnostics.find(
 			(d) => d.code === 'MISSING_THEMED_COLOR_FIELDS'
 		);
@@ -233,7 +233,7 @@ sections:
 		const result = makeThemedColorSetting(
 			'format: hex\ndefault-light: "#ffffff"'
 		);
-		expect(errorCodes(result)).toContain('MISSING_THEMED_COLOR_FIELDS');
+		expect(warningCodes(result)).toContain('MISSING_THEMED_COLOR_FIELDS');
 		const diag = result.diagnostics.find(
 			(d) => d.code === 'MISSING_THEMED_COLOR_FIELDS'
 		);
@@ -244,14 +244,14 @@ sections:
 		const result = makeThemedColorSetting(
 			'format: hex\ndefault-light: "notacolor"\ndefault-dark: "#000000"'
 		);
-		expect(errorCodes(result)).toContain('INVALID_DEFAULT');
+		expect(warningCodes(result)).toContain('INVALID_DEFAULT');
 	});
 
 	it('produces INVALID_DEFAULT when default-dark is not a valid CSS color', () => {
 		const result = makeThemedColorSetting(
 			'format: hex\ndefault-light: "#ffffff"\ndefault-dark: "notacolor"'
 		);
-		expect(errorCodes(result)).toContain('INVALID_DEFAULT');
+		expect(warningCodes(result)).toContain('INVALID_DEFAULT');
 	});
 
 	it('accepts a fully valid variable-themed-color setting', () => {
@@ -287,7 +287,7 @@ sections:
 		const result = makeGradientSetting(
 			'to: "#ffffff"\nformat: hex\nstep: 1'
 		);
-		expect(errorCodes(result)).toContain('MISSING_GRADIENT_FIELDS');
+		expect(warningCodes(result)).toContain('MISSING_GRADIENT_FIELDS');
 		const diag = result.diagnostics.find(
 			(d) => d.code === 'MISSING_GRADIENT_FIELDS'
 		);
@@ -298,7 +298,7 @@ sections:
 		const result = makeGradientSetting(
 			'from: "#000000"\nformat: hex\nstep: 1'
 		);
-		expect(errorCodes(result)).toContain('MISSING_GRADIENT_FIELDS');
+		expect(warningCodes(result)).toContain('MISSING_GRADIENT_FIELDS');
 		const diag = result.diagnostics.find(
 			(d) => d.code === 'MISSING_GRADIENT_FIELDS'
 		);
@@ -309,7 +309,7 @@ sections:
 		const result = makeGradientSetting(
 			'from: "#000000"\nto: "#ffffff"\nstep: 1'
 		);
-		expect(errorCodes(result)).toContain('MISSING_GRADIENT_FIELDS');
+		expect(warningCodes(result)).toContain('MISSING_GRADIENT_FIELDS');
 		const diag = result.diagnostics.find(
 			(d) => d.code === 'MISSING_GRADIENT_FIELDS'
 		);
@@ -320,7 +320,7 @@ sections:
 		const result = makeGradientSetting(
 			'from: "#000000"\nto: "#ffffff"\nformat: hsl-split\nstep: 1'
 		);
-		expect(errorCodes(result)).toContain('UNSUPPORTED_GRADIENT_FORMAT');
+		expect(warningCodes(result)).toContain('UNSUPPORTED_GRADIENT_FORMAT');
 		const diag = result.diagnostics.find(
 			(d) => d.code === 'UNSUPPORTED_GRADIENT_FORMAT'
 		);
@@ -332,7 +332,7 @@ sections:
 		const result = makeGradientSetting(
 			'from: "#000000"\nto: "#ffffff"\nformat: hex'
 		);
-		expect(errorCodes(result)).toContain('MISSING_GRADIENT_FIELDS');
+		expect(warningCodes(result)).toContain('MISSING_GRADIENT_FIELDS');
 		const diag = result.diagnostics.find(
 			(d) => d.code === 'MISSING_GRADIENT_FIELDS'
 		);
@@ -343,7 +343,7 @@ sections:
 		const result = makeGradientSetting(
 			'from: "#000000"\nto: "#ffffff"\nformat: hex\nstep: 0'
 		);
-		expect(errorCodes(result)).toContain('INVALID_GRADIENT_STEP');
+		expect(warningCodes(result)).toContain('INVALID_GRADIENT_STEP');
 	});
 
 	it('accepts a fully valid color-gradient setting', () => {
@@ -486,8 +486,8 @@ settings:
     title: My Color
     default: "#ff0000"
 `);
-		expect(errorCodes(result)).toContain('MISSING_COLOR_FORMAT');
-		expect(result.sections).toHaveLength(0);
+		expect(warningCodes(result)).toContain('MISSING_COLOR_FORMAT');
+		expect(result.sections).toHaveLength(1);
 	});
 
 	it('parses a valid CSS @settings block with variable-color successfully', () => {
@@ -539,7 +539,7 @@ sections:
 		expect(errorCodes(result)).toContain('INVALID_SECTION');
 	});
 
-	it('produces EMPTY_SECTION warning when all settings are invalid', () => {
+	it('still produces section when settings have recoverable warnings', () => {
 		const result = parseStandalone(`
 mode: replace
 sections:
@@ -551,7 +551,8 @@ sections:
         title: Bad Color
         default: "#ff0000"
 `);
-		// The missing format makes the color setting invalid, leaving an empty section.
-		expect(warningCodes(result)).toContain('EMPTY_SECTION');
+		// The missing format is now a warning; the setting is still produced with a fallback.
+		expect(warningCodes(result)).toContain('MISSING_COLOR_FORMAT');
+		expect(result.sections).toHaveLength(1);
 	});
 });

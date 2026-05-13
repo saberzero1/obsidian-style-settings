@@ -8,7 +8,7 @@ export {
 	parseStyleSettingsStylesheetText,
 	parseStyleSettingsWithStandaloneYamlSidecar,
 } from './StyleSettingsParser';
-export { buildSchemaEffects, buildSettingEffects } from './StyleSettingsEffects';
+export { buildSchemaEffects, buildSettingEffects, collectTargetCustomProps } from './StyleSettingsEffects';
 export type {
 	SettingEffect,
 	SettingEffectInteractionMode,

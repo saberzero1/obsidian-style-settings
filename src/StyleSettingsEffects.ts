@@ -525,3 +525,45 @@ export function buildSchemaEffects(
 
 	return records;
 }
+
+/**
+ * Collect all CSS custom property names that are directly written by
+ * Style Settings effects (from schema effect records).
+ *
+ * This includes primary variables, split-format variables (e.g. --color-r,
+ * --color-g, --color-b from rgb-split), alt-format derived variables, and
+ * gradient range prefixes.
+ *
+ * Downstream consumers use this set to determine which var() references
+ * in theme CSS must be preserved (not resolved to static values) so that
+ * user overrides propagate through the cascade.
+ *
+ * @param effectRecords - Effect records from buildSchemaEffects().
+ */
+export function collectTargetCustomProps(
+	effectRecords: SettingEffectRecord[]
+): Set<string> {
+	const targets = new Set<string>();
+
+	for (const record of effectRecords) {
+		for (const effect of record.effects) {
+			if (effect.targetKind !== 'css-variable') continue;
+
+			if (effect.variable) {
+				targets.add(effect.variable);
+			}
+			if (effect.variables) {
+				for (const v of effect.variables) {
+					targets.add(v);
+				}
+			}
+			// For gradient outputs, record the prefix so callers can
+			// match indexed variables like --gradient-00, --gradient-05, etc.
+			if (effect.variablePrefix) {
+				targets.add(effect.variablePrefix);
+			}
+		}
+	}
+
+	return targets;
+}

@@ -751,7 +751,7 @@ function validateSetting(
 			) {
 				diagnostics.push(
 					createDiagnostic({
-						severity: 'error',
+						severity: 'warning',
 						code: 'INVALID_HEADING_LEVEL',
 						message: 'Heading settings require an integer level between 1 and 6.',
 						source,
@@ -760,13 +760,16 @@ function validateSetting(
 						path,
 					})
 				);
-				return { diagnostics };
 			}
+			const safeLevel =
+				level !== undefined && Number.isInteger(level)
+					? (Math.max(1, Math.min(6, level)) as 1 | 2 | 3 | 4 | 5 | 6)
+					: 1;
 
 			return {
 				setting: {
 					...baseSetting,
-					level: level as 1 | 2 | 3 | 4 | 5 | 6,
+					level: safeLevel,
 					collapsed: getBoolean(value.collapsed),
 				} as Heading,
 				diagnostics,
@@ -785,7 +788,7 @@ function validateSetting(
 			if (defaultValue !== undefined && getBoolean(defaultValue) === undefined) {
 				diagnostics.push(
 					createDiagnostic({
-						severity: 'error',
+						severity: 'warning',
 						code: 'INVALID_DEFAULT',
 						message: 'class-toggle defaults must be boolean values.',
 						source,
@@ -794,13 +797,12 @@ function validateSetting(
 						path,
 					})
 				);
-				return { diagnostics };
 			}
 
 			return {
 				setting: {
 					...baseSetting,
-					default: getBoolean(defaultValue),
+					default: getBoolean(defaultValue) ?? false,
 					addCommand: getBoolean(value.addCommand),
 				} as ClassToggle,
 				diagnostics,
@@ -818,7 +820,7 @@ function validateSetting(
 				if (allowEmpty === undefined) {
 					diagnostics.push(
 						createDiagnostic({
-							severity: 'error',
+							severity: 'warning',
 							code: 'MISSING_ALLOW_EMPTY',
 							message: 'class-select settings require an allowEmpty boolean.',
 							source,
@@ -827,13 +829,15 @@ function validateSetting(
 							path,
 						})
 					);
-					return { diagnostics };
 				}
+				const safeAllowEmpty = allowEmpty ?? false;
 
-				if (!validateDefaultInOptions(defaultValue, normalizedOptions.options, allowEmpty)) {
+				if (
+					!validateDefaultInOptions(defaultValue, normalizedOptions.options, safeAllowEmpty)
+				) {
 					diagnostics.push(
 						createDiagnostic({
-							severity: 'error',
+							severity: 'warning',
 							code: 'INVALID_DEFAULT',
 							message:
 								'class-select defaults must match one of the normalized option values, unless allowEmpty is true and the default is omitted or set to "none".',
@@ -843,13 +847,12 @@ function validateSetting(
 							path,
 						})
 					);
-					return { diagnostics };
 				}
 
 				return {
 					setting: {
 						...baseSetting,
-						allowEmpty,
+						allowEmpty: safeAllowEmpty,
 						default: defaultValue,
 						options: normalizedOptions.options,
 					} as ClassMultiToggle,
@@ -857,10 +860,11 @@ function validateSetting(
 				};
 			}
 
+			const safeDefault = defaultValue ?? '';
 			if (!defaultValue) {
 				diagnostics.push(
 					createDiagnostic({
-						severity: 'error',
+						severity: 'warning',
 						code: 'MISSING_DEFAULT',
 						message: 'variable-select settings require a default value.',
 						source,
@@ -869,13 +873,12 @@ function validateSetting(
 						path,
 					})
 				);
-				return { diagnostics };
 			}
 
-			if (!validateDefaultInOptions(defaultValue, normalizedOptions.options, false)) {
+			if (!validateDefaultInOptions(safeDefault, normalizedOptions.options, false)) {
 				diagnostics.push(
 					createDiagnostic({
-						severity: 'error',
+						severity: 'warning',
 						code: 'INVALID_DEFAULT',
 						message:
 							'variable-select defaults must match one of the normalized option values.',
@@ -885,13 +888,12 @@ function validateSetting(
 						path,
 					})
 				);
-				return { diagnostics };
 			}
 
 			return {
 				setting: {
 					...baseSetting,
-					default: defaultValue,
+					default: safeDefault,
 					options: normalizedOptions.options,
 					quotes: getBoolean(value.quotes),
 				} as VariableSelect,
@@ -903,7 +905,7 @@ function validateSetting(
 			if (defaultValue === undefined) {
 				diagnostics.push(
 					createDiagnostic({
-						severity: 'error',
+						severity: 'warning',
 						code: 'MISSING_DEFAULT',
 						message: 'variable-text settings require a default value.',
 						source,
@@ -912,13 +914,13 @@ function validateSetting(
 						path,
 					})
 				);
-				return { diagnostics };
 			}
+			const safeDefault = defaultValue ?? '';
 
 			return {
 				setting: {
 					...baseSetting,
-					default: defaultValue,
+					default: safeDefault,
 					quotes: getBoolean(value.quotes),
 				} as VariableText,
 				diagnostics,
@@ -929,7 +931,7 @@ function validateSetting(
 			if (defaultValue === undefined) {
 				diagnostics.push(
 					createDiagnostic({
-						severity: 'error',
+						severity: 'warning',
 						code: 'MISSING_DEFAULT',
 						message: 'variable-number settings require a numeric default value.',
 						source,
@@ -938,13 +940,13 @@ function validateSetting(
 						path,
 					})
 				);
-				return { diagnostics };
 			}
+			const safeDefault = defaultValue ?? 0;
 
 			return {
 				setting: {
 					...baseSetting,
-					default: defaultValue,
+					default: safeDefault,
 					format: getString(value.format),
 				} as VariableNumber,
 				diagnostics,
@@ -955,6 +957,10 @@ function validateSetting(
 			const min = getNumber(value.min);
 			const max = getNumber(value.max);
 			const step = getNumber(value.step);
+			const safeDef = defaultValue ?? 0;
+			const safeMin = min ?? 0;
+			const safeMax = max ?? 100;
+			const safeStep = step ?? 1;
 			if (
 				defaultValue === undefined ||
 				min === undefined ||
@@ -963,7 +969,7 @@ function validateSetting(
 			) {
 				diagnostics.push(
 					createDiagnostic({
-						severity: 'error',
+						severity: 'warning',
 						code: 'MISSING_SLIDER_FIELDS',
 						message:
 							'variable-number-slider settings require numeric default, min, max, and step values.',
@@ -973,13 +979,14 @@ function validateSetting(
 						path,
 					})
 				);
-				return { diagnostics };
 			}
 
-			if (min > max) {
+			const [correctedMin, correctedMax] =
+				safeMin > safeMax ? [safeMax, safeMin] : [safeMin, safeMax];
+			if (safeMin > safeMax) {
 				diagnostics.push(
 					createDiagnostic({
-						severity: 'error',
+						severity: 'warning',
 						code: 'INVALID_SLIDER_DEFAULT',
 						message: 'Slider min must be less than or equal to max.',
 						source,
@@ -988,13 +995,13 @@ function validateSetting(
 						path,
 					})
 				);
-				return { diagnostics };
 			}
 
-			if (step <= 0) {
+			const correctedStep = safeStep <= 0 ? 1 : safeStep;
+			if (safeStep <= 0) {
 				diagnostics.push(
 					createDiagnostic({
-						severity: 'error',
+						severity: 'warning',
 						code: 'INVALID_SLIDER_DEFAULT',
 						message: 'Slider step must be greater than zero.',
 						source,
@@ -1003,13 +1010,13 @@ function validateSetting(
 						path,
 					})
 				);
-				return { diagnostics };
 			}
 
-			if (defaultValue < min) {
+			let correctedDefault = safeDef;
+			if (safeDef < correctedMin) {
 				diagnostics.push(
 					createDiagnostic({
-						severity: 'error',
+						severity: 'warning',
 						code: 'INVALID_SLIDER_DEFAULT',
 						message: 'Slider default must be greater than or equal to min.',
 						source,
@@ -1018,13 +1025,13 @@ function validateSetting(
 						path,
 					})
 				);
-				return { diagnostics };
+				correctedDefault = correctedMin;
 			}
 
-			if (defaultValue > max) {
+			if (safeDef > correctedMax) {
 				diagnostics.push(
 					createDiagnostic({
-						severity: 'error',
+						severity: 'warning',
 						code: 'INVALID_SLIDER_DEFAULT',
 						message: 'Slider default must be less than or equal to max.',
 						source,
@@ -1033,16 +1040,16 @@ function validateSetting(
 						path,
 					})
 				);
-				return { diagnostics };
+				correctedDefault = correctedMax;
 			}
 
 			return {
 				setting: {
 					...baseSetting,
-					default: defaultValue,
-					min,
-					max,
-					step,
+					default: correctedDefault,
+					min: correctedMin,
+					max: correctedMax,
+					step: correctedStep,
 					format: getString(value.format),
 				} as VariableNumberSlider,
 				diagnostics,
@@ -1053,7 +1060,7 @@ function validateSetting(
 			if (!format) {
 				diagnostics.push(
 					createDiagnostic({
-						severity: 'error',
+						severity: 'warning',
 						code: 'MISSING_COLOR_FORMAT',
 						message: `variable-color settings require a "format" field. Add \`format: <value>\` to this setting. Supported formats: ${COLOR_FORMATS_LIST}.`,
 						source,
@@ -1062,28 +1069,28 @@ function validateSetting(
 						path,
 					})
 				);
-				return { diagnostics };
 			}
-			if (!colorFormats.has(format)) {
+			const safeFormat = format ?? 'hex';
+			if (!colorFormats.has(safeFormat)) {
 				diagnostics.push(
 					createDiagnostic({
-						severity: 'error',
+						severity: 'warning',
 						code: 'UNSUPPORTED_COLOR_FORMAT',
-						message: `variable-color "format" value "${format}" is not supported. Replace it with one of: ${COLOR_FORMATS_LIST}.`,
+						message: `variable-color "format" value "${safeFormat}" is not supported. Replace it with one of: ${COLOR_FORMATS_LIST}.`,
 						source,
 						sectionId,
 						settingId: id,
 						path,
 					})
 				);
-				return { diagnostics };
 			}
+			const validatedFormat = colorFormats.has(safeFormat) ? safeFormat : 'hex';
 
 			const defaultValue = getString(value.default);
 			if (defaultValue && !isValidDefaultColor(defaultValue)) {
 				diagnostics.push(
 					createDiagnostic({
-						severity: 'error',
+						severity: 'warning',
 						code: 'INVALID_DEFAULT',
 						message:
 							'variable-color defaults must be CSS color strings that start with #, rgb, or hsl.',
@@ -1093,7 +1100,6 @@ function validateSetting(
 						path,
 					})
 				);
-				return { diagnostics };
 			}
 
 			const altFormats = validateAltFormats(
@@ -1104,14 +1110,11 @@ function validateSetting(
 				`${path}.alt-format`
 			);
 			diagnostics.push(...altFormats.diagnostics);
-			if (altFormats.diagnostics.some((diagnostic) => diagnostic.severity === 'error')) {
-				return { diagnostics };
-			}
 
 			return {
 				setting: {
 					...baseSetting,
-					format,
+					format: validatedFormat,
 					default: defaultValue,
 					'alt-format': altFormats.value || [],
 					opacity: getBoolean(value.opacity),
@@ -1126,7 +1129,7 @@ function validateSetting(
 			if (!format) {
 				diagnostics.push(
 					createDiagnostic({
-						severity: 'error',
+						severity: 'warning',
 						code: 'MISSING_COLOR_FORMAT',
 						message: `variable-themed-color settings require a "format" field. Add \`format: <value>\` to this setting. Supported formats: ${COLOR_FORMATS_LIST}.`,
 						source,
@@ -1135,26 +1138,26 @@ function validateSetting(
 						path,
 					})
 				);
-				return { diagnostics };
 			}
-			if (!colorFormats.has(format)) {
+			const safeFormat = format ?? 'hex';
+			if (!colorFormats.has(safeFormat)) {
 				diagnostics.push(
 					createDiagnostic({
-						severity: 'error',
+						severity: 'warning',
 						code: 'UNSUPPORTED_COLOR_FORMAT',
-						message: `variable-themed-color "format" value "${format}" is not supported. Replace it with one of: ${COLOR_FORMATS_LIST}.`,
+						message: `variable-themed-color "format" value "${safeFormat}" is not supported. Replace it with one of: ${COLOR_FORMATS_LIST}.`,
 						source,
 						sectionId,
 						settingId: id,
 						path,
 					})
 				);
-				return { diagnostics };
 			}
+			const validatedFormat = colorFormats.has(safeFormat) ? safeFormat : 'hex';
 			if (!light) {
 				diagnostics.push(
 					createDiagnostic({
-						severity: 'error',
+						severity: 'warning',
 						code: 'MISSING_THEMED_COLOR_FIELDS',
 						message: 'variable-themed-color settings require a "default-light" field. Add `default-light: <css-color>` (e.g. #ffffff or hsl(0, 0%, 100%)) to this setting.',
 						source,
@@ -1163,12 +1166,11 @@ function validateSetting(
 						path,
 					})
 				);
-				return { diagnostics };
 			}
 			if (!dark) {
 				diagnostics.push(
 					createDiagnostic({
-						severity: 'error',
+						severity: 'warning',
 						code: 'MISSING_THEMED_COLOR_FIELDS',
 						message: 'variable-themed-color settings require a "default-dark" field. Add `default-dark: <css-color>` (e.g. #000000 or hsl(0, 0%, 0%)) to this setting.',
 						source,
@@ -1177,13 +1179,14 @@ function validateSetting(
 						path,
 					})
 				);
-				return { diagnostics };
 			}
+			const safeLight = light ?? '#000000';
+			const safeDark = dark ?? '#000000';
 
-			if (!isValidDefaultColor(light) || !isValidDefaultColor(dark)) {
+			if (!isValidDefaultColor(safeLight) || !isValidDefaultColor(safeDark)) {
 				diagnostics.push(
 					createDiagnostic({
-						severity: 'error',
+						severity: 'warning',
 						code: 'INVALID_DEFAULT',
 						message:
 							'variable-themed-color defaults must be CSS color strings that start with #, rgb, or hsl.',
@@ -1193,7 +1196,6 @@ function validateSetting(
 						path,
 					})
 				);
-				return { diagnostics };
 			}
 
 			const altFormats = validateAltFormats(
@@ -1204,16 +1206,13 @@ function validateSetting(
 				`${path}.alt-format`
 			);
 			diagnostics.push(...altFormats.diagnostics);
-			if (altFormats.diagnostics.some((diagnostic) => diagnostic.severity === 'error')) {
-				return { diagnostics };
-			}
 
 			return {
 				setting: {
 					...baseSetting,
-					format,
-					'default-light': light,
-					'default-dark': dark,
+					format: validatedFormat,
+					'default-light': safeLight,
+					'default-dark': safeDark,
 					'alt-format': altFormats.value || [],
 					opacity: getBoolean(value.opacity),
 				} as VariableThemedColor,
@@ -1229,7 +1228,7 @@ function validateSetting(
 			if (!from) {
 				diagnostics.push(
 					createDiagnostic({
-						severity: 'error',
+						severity: 'warning',
 						code: 'MISSING_GRADIENT_FIELDS',
 						message: 'color-gradient settings require a "from" field. Add `from: <css-color>` (e.g. #000000) to this setting.',
 						source,
@@ -1238,12 +1237,11 @@ function validateSetting(
 						path,
 					})
 				);
-				return { diagnostics };
 			}
 			if (!to) {
 				diagnostics.push(
 					createDiagnostic({
-						severity: 'error',
+						severity: 'warning',
 						code: 'MISSING_GRADIENT_FIELDS',
 						message: 'color-gradient settings require a "to" field. Add `to: <css-color>` (e.g. #ffffff) to this setting.',
 						source,
@@ -1252,12 +1250,11 @@ function validateSetting(
 						path,
 					})
 				);
-				return { diagnostics };
 			}
 			if (!format) {
 				diagnostics.push(
 					createDiagnostic({
-						severity: 'error',
+						severity: 'warning',
 						code: 'MISSING_GRADIENT_FIELDS',
 						message: `color-gradient settings require a "format" field. Add \`format: <value>\` to this setting. Supported gradient formats: ${GRADIENT_FORMATS_LIST}.`,
 						source,
@@ -1266,26 +1263,27 @@ function validateSetting(
 						path,
 					})
 				);
-				return { diagnostics };
 			}
-			if (!gradientFormats.has(format)) {
+			const safeFrom = from ?? '';
+			const safeTo = to ?? '';
+			const safeFormat = format ?? 'hex';
+			if (!gradientFormats.has(safeFormat)) {
 				diagnostics.push(
 					createDiagnostic({
-						severity: 'error',
+						severity: 'warning',
 						code: 'UNSUPPORTED_GRADIENT_FORMAT',
-						message: `color-gradient "format" value "${format}" is not supported. Replace it with one of: ${GRADIENT_FORMATS_LIST}.`,
+						message: `color-gradient "format" value "${safeFormat}" is not supported. Replace it with one of: ${GRADIENT_FORMATS_LIST}.`,
 						source,
 						sectionId,
 						settingId: id,
 						path,
 					})
 				);
-				return { diagnostics };
 			}
 			if (step === undefined) {
 				diagnostics.push(
 					createDiagnostic({
-						severity: 'error',
+						severity: 'warning',
 						code: 'MISSING_GRADIENT_FIELDS',
 						message: 'color-gradient settings require a numeric "step" field. Add `step: <number>` (e.g. step: 1) to this setting.',
 						source,
@@ -1294,13 +1292,14 @@ function validateSetting(
 						path,
 					})
 				);
-				return { diagnostics };
 			}
+			const validatedFormat = gradientFormats.has(safeFormat) ? safeFormat : 'hex';
+			const safeStep = step ?? 1;
 
-			if (step <= 0) {
+			if (safeStep <= 0) {
 				diagnostics.push(
 					createDiagnostic({
-						severity: 'error',
+						severity: 'warning',
 						code: 'INVALID_GRADIENT_STEP',
 						message: 'color-gradient step must be greater than zero.',
 						source,
@@ -1309,16 +1308,16 @@ function validateSetting(
 						path,
 					})
 				);
-				return { diagnostics };
 			}
+			const correctedStep = safeStep <= 0 ? 1 : safeStep;
 
 			return {
 				setting: {
 					...baseSetting,
-					from,
-					to,
-					format: format as 'hex' | 'hsl' | 'rgb',
-					step,
+					from: safeFrom,
+					to: safeTo,
+					format: validatedFormat as 'hex' | 'hsl' | 'rgb',
+					step: correctedStep,
 					pad: pad === undefined ? 0 : pad,
 				} as ColorGradient,
 				diagnostics,
